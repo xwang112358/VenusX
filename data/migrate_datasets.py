@@ -8,6 +8,7 @@ from huggingface_hub.utils import HfFolder, HfHubHTTPError
 # --- 配置区 ---
 ORIGINAL_ORG = "AI4Protein"
 ANONYMOUS_USER = "anonymous-researcher-123"
+COLLECTION_NAME = "VenusX"
 LOCAL_TEMP_DIR = "./migration_temp_venusx"
 # ----------------
 
@@ -15,14 +16,9 @@ def run_command(command, working_dir):
     """在指定目录下安全地运行一个shell命令"""
     print(f"[{working_dir}]$ {command}")
     try:
-        result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-        if result.stdout:
-            print(result.stdout)
-        return result
+        subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         print(f"  ❌ 命令执行失败: {e.stderr}")
-        if e.stdout:
-            print(f"  标准输出: {e.stdout}")
         raise
 
 def anonymize_readme(readme_path, original_author):
@@ -72,13 +68,8 @@ def migrate_venusx_datasets(api: HfApi):
             try:
                 repo_files = api.list_repo_files(repo_id=new_repo_id, repo_type="dataset")
                 if repo_files:
-                    # 过滤掉只有 .gitattributes 的情况，认为这是空仓库
-                    meaningful_files = [f for f in repo_files if f != '.gitattributes']
-                    if meaningful_files:
-                        print(f"  ✅ 目标仓库已有 {len(meaningful_files)} 个有效文件，跳过迁移。")
-                        continue
-                    else:
-                        print(f"  ℹ️  目标仓库只有 .gitattributes 文件，视为空仓库，继续迁移。")
+                    print(f"  ✅ 目标仓库已有文件，跳过迁移。")
+                    continue
             except HfHubHTTPError as e:
                 if e.response.status_code != 404: raise
 
@@ -94,41 +85,18 @@ def migrate_venusx_datasets(api: HfApi):
             run_command(f"git clone https://{ANONYMOUS_USER}:{token}@huggingface.co/datasets/{new_repo_id} {new_repo_local_path}", working_dir=".")
 
             print(f"  -> 正在复制文件...")
-            copied_files = []
             for item in os.listdir(original_repo_local_path):
                 if item == '.git': continue
                 s = os.path.join(original_repo_local_path, item)
                 d = os.path.join(new_repo_local_path, item)
-                if os.path.isdir(s): 
-                    shutil.copytree(s, d, dirs_exist_ok=True)
-                    copied_files.append(f"{item}/ (目录)")
-                else: 
-                    shutil.copy2(s, d)
-                    copied_files.append(item)
-            print(f"  -> 已复制 {len(copied_files)} 个项目: {', '.join(copied_files)}")
-            
+                if os.path.isdir(s): shutil.copytree(s, d, dirs_exist_ok=True)
+                else: shutil.copy2(s, d)
             anonymize_readme(os.path.join(new_repo_local_path, "README.md"), ORIGINAL_ORG)
 
-            print(f"  -> 正在检查新仓库中的文件...")
-            new_files = os.listdir(new_repo_local_path)
-            print(f"  -> 新仓库包含 {len(new_files)} 个文件/目录: {new_files}")
-
             print(f"  -> 正在提交并推送到匿名仓库...")
-            
-            # 配置 Git 用户信息（避免提交时缺少用户配置）
-            run_command('git config user.email "anonymous@example.com"', working_dir=new_repo_local_path)
-            run_command('git config user.name "Anonymous Researcher"', working_dir=new_repo_local_path)
-            
             run_command("git add .", working_dir=new_repo_local_path)
-            
-            # 检查 Git 状态
-            print(f"  -> 检查 Git 状态...")
-            run_command("git status", working_dir=new_repo_local_path)
-            
             run_command('git commit -m "Initial anonymous commit"', working_dir=new_repo_local_path)
-            
-            # 强制推送以确保覆盖远程仓库的内容
-            run_command("git push --force", working_dir=new_repo_local_path)
+            run_command("git push", working_dir=new_repo_local_path)
 
             print(f"  ✅ 成功迁移 {original_repo_id} 到 {new_repo_id}")
 
@@ -145,10 +113,15 @@ def manage_venusx_datasets(api: HfApi):
     """
     任务二：管理 VenusX 数据集。
     - 将 ANONYMOUS_USER 下所有 VenusX 仓库设为公开。
+    - 将它们添加到指定的合集中。
     """
     print("\n=============================================")
     print("======= 任务2: 开始管理已迁移仓库 =======")
     print("=============================================\n")
+
+    collection_slug = f"{ANONYMOUS_USER}/{COLLECTION_NAME}"
+    print(f"正在确保合集 '{collection_slug}' 存在...")
+    api.create_collection(collection_slug, exist_ok=True)
 
     print(f"正在获取用户 '{ANONYMOUS_USER}' 名下的 'VenusX' 数据集...")
     try:
@@ -173,6 +146,14 @@ def manage_venusx_datasets(api: HfApi):
         except HfHubHTTPError as e:
             if "is already public" in str(e): print(f"  ℹ️  已经是公开的。")
             else: print(f"  ❌ 设置可见性时出错: {e}")
+
+        try:
+            print(f"  -> 添加到合集 '{COLLECTION_NAME}'...")
+            api.add_repo_to_collection(collection_slug, repo_id=repo_id, repo_type="dataset")
+            print(f"  ✅ 已添加到合集。")
+        except HfHubHTTPError as e:
+            if "already in collection" in str(e): print(f"  ℹ️  已在合集中。")
+            else: print(f"  ❌ 添加到合集时出错: {e}")
                 
     print("\n管理任务执行完毕！")
 
@@ -181,7 +162,7 @@ if __name__ == "__main__":
     # 设置命令行参数解析
     parser = argparse.ArgumentParser(description="迁移并管理Hugging Face上的VenusX数据集。")
     parser.add_argument("--migrate-only", action="store_true", help="只执行迁移任务，不进行管理。")
-    parser.add_argument("--manage-only", action="store_true", help="只执行管理任务（设为公开），不进行迁移。")
+    parser.add_argument("--manage-only", action="store_true", help="只执行管理任务（设为公开、加入合集），不进行迁移。")
     args = parser.parse_args()
 
     # 检查是否同时使用了互斥的参数
