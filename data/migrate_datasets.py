@@ -100,7 +100,9 @@ def migrate_venusx_datasets(api: HfApi):
             print(f"  -> 正在提交并推送到匿名仓库...")
             run_command("git add .", working_dir=new_repo_local_path)
             run_command('git commit -m "Initial anonymous commit"', working_dir=new_repo_local_path)
-            run_command("git push", working_dir=new_repo_local_path)
+            
+            # 强制推送以确保覆盖远程仓库的内容
+            run_command("git push --force", working_dir=new_repo_local_path)
 
             print(f"  ✅ 成功迁移 {original_repo_id} 到 {new_repo_id}")
 
