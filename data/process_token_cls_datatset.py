@@ -344,35 +344,66 @@ def add_interpro_labels_from_master(data_dir, master_csv_path):
 
 if __name__ == "__main__":
     # 1. 跨家族划分
-    # split_by_family_size_group_2("/home/tanyang/workspace/VenusScope/data/interpro_2703/domain", 
-    #                         "/home/tanyang/workspace/VenusScope/data/token_cls_dataset/cross_family/domain")
+    # split_by_family_size_group_2("/home/tanyang/workspace/VenusX/data/interpro_2703/domain", 
+    #                         "/home/tanyang/workspace/VenusX/data/token_cls_dataset/cross_family/domain")
 
     # 2. 合并并划分数据集
-    # merge_and_split_csv("/home/tanyang/workspace/VenusScope/data/interpro_2703/domain", 
-    #                     "/home/tanyang/workspace/VenusScope/data/token_cls_dataset/cross_family/domain/sim_70",
-    #                     "merged_70.csv")
+    # merge_and_split_csv("/home/tanyang/workspace/VenusX/data/interpro_2703/domain", 
+    #                     "/home/tanyang/workspace/VenusX/data/token_cls_dataset/cross_family/domain/sim_90",
+    #                     "merged_90.csv")
+    # data = 'motif'
+    # split_csv(
+    #     f"/home/tanyang/workspace/VenusX/data/interpro_2503/{data}/{data}_token_cls_full_af2_30.csv",
+    #     f"/home/tanyang/workspace/VenusX/data/token_cls_dataset/mix_family/{data}/full_sim_30"
+    # )
+
+    split_csv(
+        f"/home/tanyang/workspace/VenusX/data/sabdab_2503/sabdab_antigen_merged_token_cls.csv",
+        f"/home/tanyang/workspace/VenusX/data/token_cls_dataset/mix_family/sabdab/merged"
+    )
+    # stats = count_csv_rows('/home/tanyang/workspace/VenusX/data/fragment_cls_dataset/domain/sim_50')
+    # print("\nDetailed statistics:")
+    # for file_path, row_count in stats.items():
+    #     print(f"{file_path}: {row_count} rows")
+    
+    # split_csv(
+    #     "/home/tanyang/workspace/VenusX/data/interpro_2503/binding_site/binding_site_token_cls_full_af2_90.csv",
+    #     "/home/tanyang/workspace/VenusX/data/token_cls_dataset/mix_family/binding_site/full_sim_90"
+    # )
+    # stats = count_csv_rows('/home/tanyang/workspace/VenusX/data/fragment_cls_dataset/domain/sim_70')
+    # print("\nDetailed statistics:")
+    # for file_path, row_count in stats.items():
+    #     print(f"{file_path}: {row_count} rows")
+    
+    # split_csv(
+    #     "/home/tanyang/workspace/VenusX/data/interpro_2503/conserved_site/conserved_site_token_cls_full_af2_90.csv",
+    #     "/home/tanyang/workspace/VenusX/data/token_cls_dataset/mix_family/conserved_site/full_sim_90"
+    # )
+    # stats = count_csv_rows('/home/tanyang/workspace/VenusX/data/fragment_cls_dataset/domain/sim_90')
+    # print("\nDetailed statistics:")
+    # for file_path, row_count in stats.items():
+    #     print(f"{file_path}: {row_count} rows")
+    
+    # split_csv(
+    #     "/home/tanyang/workspace/VenusX/data/interpro_2503/motif/motif_token_cls_full_af2_90.csv",
+    #     "/home/tanyang/workspace/VenusX/data/token_cls_dataset/mix_family/motif/full_sim_90"
+    # )
+    # stats = count_csv_rows('/home/tanyang/workspace/VenusX/data/fragment_cls_dataset/motif/sim_90')
+    # print("\nDetailed statistics:")
+    # for file_path, row_count in stats.items():
+    #     print(f"{file_path}: {row_count} rows")
 
     # split_csv(
-    #     "/home/tanyang/workspace/VenusScope/data/binding_site_202503/binding_site_token_cls_50.csv",
-    #     "/home/tanyang/workspace/VenusScope/data/token_cls_dataset/mix_family/binding_site/sim_50"
+    #     "/home/tanyang/workspace/VenusX/data/interpro_2503/domain/domain_token_cls_full_af2_90.csv",
+    #     "/home/tanyang/workspace/VenusX/data/token_cls_dataset/mix_family/domain/full_sim_90"
     # )
-    stats = count_csv_rows('/home/tanyang/workspace/VenusScope/data/token_cls_dataset/mix_family/binding_site/sim_50')
-    print("\nDetailed statistics:")
-    for file_path, row_count in stats.items():
-        print(f"{file_path}: {row_count} rows")
-    
-    stats = count_csv_rows('/home/tanyang/workspace/VenusScope/data/token_cls_dataset/mix_family/binding_site/sim_70')
-    print("\nDetailed statistics:")
-    for file_path, row_count in stats.items():
-        print(f"{file_path}: {row_count} rows")
-
-    stats = count_csv_rows('/home/tanyang/workspace/VenusScope/data/token_cls_dataset/mix_family/binding_site/sim_90')
-    print("\nDetailed statistics:")
-    for file_path, row_count in stats.items():
-        print(f"{file_path}: {row_count} rows")
+    # stats = count_csv_rows('/home/tanyang/workspace/VenusX/data/token_cls_dataset/mix_family/domain/full_sim_90')
+    # print("\nDetailed statistics:")
+    # for file_path, row_count in stats.items():
+    #     print(f"{file_path}: {row_count} rows")
     
 
-    # file_dir = '/home/tanyang/workspace/VenusScope/data/interpro_2503/'
+    # file_dir = '/home/tanyang/workspace/VenusX/data/interpro_2503/'
     # process_interpro_labels(
     #     file_dir + 'domain/domain_token_cls_fragment_af2_unique_merged.csv'
     # )
@@ -380,13 +411,13 @@ if __name__ == "__main__":
     #     file_dir + 'domain/domain_token_cls_fragment_af2_unique_merged_50.csv'
     # )
     # process_interpro_labels(
-    #     file_dir + 'domain/domain_token_cls_fragment_af2_unique_merged_70.csv'
+    #     file_dir + 'domain/domain_token_cls_fragment_af2_unique_merged_90.csv'
     # )
     # process_interpro_labels(
     #     file_dir + 'domain/domain_token_cls_fragment_af2_unique_merged_90.csv'
     # )
     
-    # file_dir = '/home/tanyang/workspace/VenusScope/data/'
+    # file_dir = '/home/tanyang/workspace/VenusX/data/'
 
     # add_interpro_labels_from_master(
     #     file_dir + 'token_cls_dataset/cross_family/domain',
@@ -400,12 +431,12 @@ if __name__ == "__main__":
     
     # add_interpro_labels_from_master(
     #     file_dir + 'token_cls_dataset/cross_family/active_site',
-    #     file_dir + 'interpro_2503/active_site/active_site_token_cls_fragment_af2_unique_merged_70.csv'
+    #     file_dir + 'interpro_2503/active_site/active_site_token_cls_fragment_af2_unique_merged_90.csv'
     # )
     
     # add_interpro_labels_from_master(
-    #     file_dir + 'token_cls_dataset/cross_family/binding_site',
-    #     file_dir + 'interpro_2503/binding_site/binding_site_token_cls_fragment_af2_unique_merged_50.csv'
+    #     file_dir + 'token_cls_dataset/cross_family/sabdab',
+    #     file_dir + 'interpro_2503/sabdab/sabdab_token_cls_fragment_af2_unique_merged_50.csv'
     # )
 
     # add_interpro_labels_from_master(
