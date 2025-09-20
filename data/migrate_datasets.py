@@ -15,9 +15,14 @@ def run_command(command, working_dir):
     """在指定目录下安全地运行一个shell命令"""
     print(f"[{working_dir}]$ {command}")
     try:
-        subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+        result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+        if result.stdout:
+            print(result.stdout)
+        return result
     except subprocess.CalledProcessError as e:
         print(f"  ❌ 命令执行失败: {e.stderr}")
+        if e.stdout:
+            print(f"  标准输出: {e.stdout}")
         raise
 
 def anonymize_readme(readme_path, original_author):
@@ -109,6 +114,11 @@ def migrate_venusx_datasets(api: HfApi):
             print(f"  -> 新仓库包含 {len(new_files)} 个文件/目录: {new_files}")
 
             print(f"  -> 正在提交并推送到匿名仓库...")
+            
+            # 配置 Git 用户信息（避免提交时缺少用户配置）
+            run_command('git config user.email "anonymous@example.com"', working_dir=new_repo_local_path)
+            run_command('git config user.name "Anonymous Researcher"', working_dir=new_repo_local_path)
+            
             run_command("git add .", working_dir=new_repo_local_path)
             
             # 检查 Git 状态
