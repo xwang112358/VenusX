@@ -89,16 +89,32 @@ def migrate_venusx_datasets(api: HfApi):
             run_command(f"git clone https://{ANONYMOUS_USER}:{token}@huggingface.co/datasets/{new_repo_id} {new_repo_local_path}", working_dir=".")
 
             print(f"  -> 正在复制文件...")
+            copied_files = []
             for item in os.listdir(original_repo_local_path):
                 if item == '.git': continue
                 s = os.path.join(original_repo_local_path, item)
                 d = os.path.join(new_repo_local_path, item)
-                if os.path.isdir(s): shutil.copytree(s, d, dirs_exist_ok=True)
-                else: shutil.copy2(s, d)
+                if os.path.isdir(s): 
+                    shutil.copytree(s, d, dirs_exist_ok=True)
+                    copied_files.append(f"{item}/ (目录)")
+                else: 
+                    shutil.copy2(s, d)
+                    copied_files.append(item)
+            print(f"  -> 已复制 {len(copied_files)} 个项目: {', '.join(copied_files)}")
+            
             anonymize_readme(os.path.join(new_repo_local_path, "README.md"), ORIGINAL_ORG)
+
+            print(f"  -> 正在检查新仓库中的文件...")
+            new_files = os.listdir(new_repo_local_path)
+            print(f"  -> 新仓库包含 {len(new_files)} 个文件/目录: {new_files}")
 
             print(f"  -> 正在提交并推送到匿名仓库...")
             run_command("git add .", working_dir=new_repo_local_path)
+            
+            # 检查 Git 状态
+            print(f"  -> 检查 Git 状态...")
+            run_command("git status", working_dir=new_repo_local_path)
+            
             run_command('git commit -m "Initial anonymous commit"', working_dir=new_repo_local_path)
             
             # 强制推送以确保覆盖远程仓库的内容
