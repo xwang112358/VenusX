@@ -25,9 +25,9 @@ warnings.filterwarnings("ignore")
 
 protssn_config = {
     "gnn": "egnn",
-    "gnn_config": "/home/tanyang/workspace/VenusScope/src/models/protssn/egnn.yaml",
+    "gnn_config": "~/workspace/VenusScope/src/models/protssn/egnn.yaml",
     "gnn_hidden_dim": 512,
-    "gnn_model_path": "/home/tanyang/workspace-done/2024/eLife/ProtSSN/model/protssn_k20_h512.pt",
+    "gnn_model_path": "~/workspace-done/2024/eLife/ProtSSN/model/protssn_k20_h512.pt",
     "plm": "facebook/esm2_t33_650M_UR50D",
     "plm_hidden_size": 1280,
     "c_alpha_max_neighbors": 10
@@ -400,16 +400,16 @@ if __name__ == '__main__':
     
     # model config
     parser.add_argument("--gnn", type=str, default="egnn", help="gat, gcn or egnn")
-    parser.add_argument("--gnn_config", type=str, default="/home/tanyang/workspace/VenusScope/src/models/protssn/egnn.yaml", help="gnn config")
+    parser.add_argument("--gnn_config", type=str, default="~/workspace/VenusScope/src/models/protssn/egnn.yaml", help="gnn config")
     parser.add_argument("--gnn_hidden_dim", type=int, default=512, help="hidden size of gnn")
-    parser.add_argument("--gnn_model_path", type=str, default="/home/tanyang/workspace-done/2024/eLife/ProtSSN/model/protssn_k20_h512.pt", help="gnn model path")
+    parser.add_argument("--gnn_model_path", type=str, default="~/workspace-done/2024/eLife/ProtSSN/model/protssn_k20_h512.pt", help="gnn model path")
     parser.add_argument("--plm", type=str, default="facebook/esm2_t33_650M_UR50D", help="esm param number")
     parser.add_argument("--plm_hidden_size", type=int, default=1280, help="hidden size of plm")
     parser.add_argument("--c_alpha_max_neighbors", type=int, default=10, help="graph dataset K")
     
     # dataset config
     parser.add_argument("--out_type", type=str, nargs='+', default="embed", help="logits, ppl, or embed")
-    parser.add_argument("--pdb_file", type=str, default='/home/tanyang/R_R/GwR/test/AF-P33734-F1-model_v4.pdb', help="pdb file path")
+    parser.add_argument("--pdb_file", type=str, default='~/R_R/GwR/test/AF-P33734-F1-model_v4.pdb', help="pdb file path")
     parser.add_argument("--pdb_dir", type=str, 
     default=None, help="pdb file directory")
     parser.add_argument("--out_file", type=str, default='test_prossn.pt', help="output file path")
@@ -426,7 +426,7 @@ if __name__ == '__main__':
     protssn = ProtSSN(
         c_alpha_max_neighbors=args.c_alpha_max_neighbors,
         pre_transform=NormalizeProtein(
-            filename=f'/home/tanyang/workspace/VenusScope/src/models/protssn/cath_k{args.c_alpha_max_neighbors}_mean_attr.pt'
+            filename=f'~/workspace/VenusScope/src/models/protssn/cath_k{args.c_alpha_max_neighbors}_mean_attr.pt'
         ),
         plm_model=plm_model, gnn_model=gnn_model
     )
