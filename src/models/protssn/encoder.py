@@ -25,7 +25,7 @@ warnings.filterwarnings("ignore")
 
 protssn_config = {
     "gnn": "egnn",
-    "gnn_config": "/home/tanyang/workspace/VenusScope/src/models/protssn/egnn.yaml",
+    "gnn_config": "/home/tanyang/workspace/VenusX/src/models/protssn/egnn.yaml",
     "gnn_hidden_dim": 512,
     "gnn_model_path": "/home/tanyang/workspace-done/2024/eLife/ProtSSN/model/protssn_k20_h512.pt",
     "plm": "facebook/esm2_t33_650M_UR50D",
@@ -63,13 +63,19 @@ class ProtSSN:
     @torch.no_grad()
     def compute_logits(self, pdb_file, *args, **kwargs) -> torch.Tensor:
         graph = self.generate_protein_graph(pdb_file)
+        if graph is None:
+            raise ValueError(f"Failed to generate protein graph for PDB file: {pdb_file}. "
+                           f"This may be due to unknown amino acids or invalid structure.")
         batch_graph = self.plm_model([graph])
         logits, embeds = self.gnn_model(batch_graph)
         return logits
     
     @torch.no_grad()
-    def compute_embedding(self, pdb_file, reduction=None, *args, **kwargs) -> torch.Tensor:
+    def compute_embedding(self, pdb_file, reduction=None, *args, **kwargs):
         graph = self.generate_protein_graph(pdb_file)
+        if graph is None:
+            # Return None instead of raising exception to allow batch processing to handle it
+            return None
         batch_graph = self.plm_model([graph])
         logits, embeds = self.gnn_model(batch_graph)
         if reduction is None:
@@ -85,13 +91,21 @@ class ProtSSN:
     @torch.no_grad()
     def compute_perplexity(self, pdb_file, *args, **kwargs) -> float:
         graph = self.generate_protein_graph(pdb_file)
+        if graph is None:
+            raise ValueError(f"Failed to generate protein graph for PDB file: {pdb_file}. "
+                           f"This may be due to unknown amino acids or invalid structure.")
         batch_graph = self.plm_model([graph])
         logits, embeds = self.gnn_model(batch_graph)
         loss = self.loss_fn(logits[:, :20], graph.x[:,:20])
         return torch.exp(loss).item()
     
     def generate_protein_graph(self, pdb_file):
-        rec, rec_coords, c_alpha_coords, n_coords, c_coords,seq = self.get_receptor_inference(pdb_file)
+        try:
+            rec, rec_coords, c_alpha_coords, n_coords, c_coords,seq = self.get_receptor_inference(pdb_file)
+        except (ValueError, IndexError) as e:
+            # Handle cases where PDB file has no valid residues or chains
+            return None
+        
         graph = self.get_calpha_graph(rec, c_alpha_coords, n_coords, c_coords,seq)
         if not graph:
             return None
@@ -363,6 +377,12 @@ class ProtSSN:
                 valid_lengths.append(lengths[i])
             else:
                 invalid_chain_ids.append(chain.get_id())
+        
+        # Check if there are any valid coordinates
+        if len(valid_c_alpha_coords) == 0:
+            raise ValueError(f"No valid residues found in PDB file: {rec_path}. "
+                           f"All chains may have been filtered out or contain no valid amino acids.")
+        
         # list with n_residues arrays: [n_atoms, 3]
         coords = [item for sublist in valid_coords for item in sublist]
 
