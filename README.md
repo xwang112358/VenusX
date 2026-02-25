@@ -4,20 +4,15 @@
 
 **VenusX** is a large-scale benchmark for fine-grained protein functional annotation and pairing at residue, fragment, and domain levels.
 
-Key features:
-- Three task categories with six annotation types:
-  - Residue-level binary classification
-  - Fragment-level multi-class classification 
-  - Unsupervised local structure pairing
-
-- Six functional annotation types: **Active sites**, **Binding sites**, **Conserved sites**, **Motifs**, **Domains**, **Epitopes**
-
-- Dataset characteristics:
-  - Over **878,000** samples from InterPro, BioLiP, and SAbDab databases
-  - Mixed-family and cross-family splits at 50%, 70%, and 90% sequence identity thresholds
 <img src="img/framework.png" alt="Logo">
 
 ## 📑 Results
+
+### News
+
+- 2026-02-25: **The newest implementation has been transfered to the VenusFactory repository.** [Github](https://github.com/AI4Protein/VenusFactory)
+- 2026-01-26: VenusX is accepted by ICLR 2026. [Paper](https://openreview.net/forum?id=zcmL592XRG)
+
 ### Paper Results
 
 VenusX benchmarks fine-grained protein understanding across multiple subprotein levels through three tasks: 
@@ -111,7 +106,13 @@ Folder [`VenusX/script/example/embedding`](https://github.com/AI4Protein/VenusX/
 If you find this work useful, please consider citing:
 
 ```bibtex
-
+@inproceedings{tan2026venusx,
+   title={{VenusX}: Unlocking Fine-Grained Functional Understanding of Proteins},
+   author={Yang Tan and Wenrui Gou and Bozitao Zhong and Huiqun Yu and Liang Hong and Bingxin Zhou},
+   booktitle={The Fourteenth International Conference on Learning Representations},
+   year={2026},
+   url={https://openreview.net/forum?id=zcmL592XRG}
+}
 ```
 
 ## 📝 License
