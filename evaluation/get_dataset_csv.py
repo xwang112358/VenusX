@@ -28,13 +28,11 @@ DEFAULT_OUTPUT_DIR = os.path.join(_REPO_ROOT, "data", "interpro_2503")
 SPLITS = {"train": "train", "valid": "validation", "test": "test"}
 
 # All known VenusX datasets (Level × Type × Threshold)
-_LEVELS = ["Res", "Frag"]
-_TYPES = ["Act", "Binding", "Domain", "Motif", "Conserved"]
+_TYPES = ["Act", "BindI", "Dom", "Motif", "Evo"]
 _THRESHOLDS = ["MF50", "MF70", "MF90"]
 
 KNOWN_DATASETS = [
-    f"AI4Protein/VenusX_{level}_{type_}_{thresh}"
-    for level in _LEVELS
+    f"AI4Protein/VenusX_Res_{type_}_{thresh}"
     for type_ in _TYPES
     for thresh in _THRESHOLDS
 ] + [
@@ -102,9 +100,20 @@ def main():
         default=DEFAULT_OUTPUT_DIR,
         help=f"Root directory for CSV output (default: {DEFAULT_OUTPUT_DIR})",
     )
+    parser.add_argument(
+        "--pdb",
+        action="store_true",
+        default=False,
+        help="Also download AlphaFold2 PDB archives",
+    )
     args = parser.parse_args()
 
-    datasets = KNOWN_DATASETS if args.all else [args.dataset_name]
+    if args.all:
+        csv_datasets = [d for d in KNOWN_DATASETS if "AlphaFold2_PDB" not in d]
+        pdb_datasets = [d for d in KNOWN_DATASETS if "AlphaFold2_PDB" in d]
+        datasets = csv_datasets + (pdb_datasets if args.pdb else [])
+    else:
+        datasets = [args.dataset_name]
 
     for i, ds_name in enumerate(datasets, 1):
         print(f"\n[{i}/{len(datasets)}] {ds_name}")
