@@ -15,8 +15,10 @@ Usage:
 
 import argparse
 import os
+import zipfile
 
 from datasets import load_dataset
+from huggingface_hub import hf_hub_download, list_repo_files
 
 # Default save location: <repo_root>/data/interpro_2503
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,10 +37,37 @@ KNOWN_DATASETS = [
     for level in _LEVELS
     for type_ in _TYPES
     for thresh in _THRESHOLDS
+] + [
+    f"AI4Protein/VenusX_{type_}_AlphaFold2_PDB"
+    for type_ in ["Act", "Motif", "BindI", "Dom", "Evo"]
 ]
 
 
+def save_pdb_dataset(dataset_name: str, output_dir: str) -> None:
+    """Download and extract PDB zip archives from a HuggingFace dataset repo."""
+    short_name = dataset_name.split("/")[-1]
+    save_dir = os.path.join(output_dir, short_name)
+    os.makedirs(save_dir, exist_ok=True)
+
+    zip_files = [
+        f for f in list_repo_files(dataset_name, repo_type="dataset")
+        if f.endswith(".zip")
+    ]
+    for zip_name in zip_files:
+        print(f"  [{zip_name}] downloading... ", end="", flush=True)
+        local_zip = hf_hub_download(
+            repo_id=dataset_name, filename=zip_name, repo_type="dataset"
+        )
+        with zipfile.ZipFile(local_zip, "r") as zf:
+            zf.extractall(save_dir)
+        print(f"extracted → {save_dir}")
+
+
 def save_dataset(dataset_name: str, output_dir: str) -> None:
+    if "AlphaFold2_PDB" in dataset_name:
+        save_pdb_dataset(dataset_name, output_dir)
+        return
+
     short_name = dataset_name.split("/")[-1]  # e.g. VenusX_Res_Act_MF50
     save_dir = os.path.join(output_dir, short_name)
     os.makedirs(save_dir, exist_ok=True)
