@@ -6,6 +6,36 @@
 
 <img src="img/framework.png" alt="Logo">
 
+## uv dependencies
+
+Recommended for fast, reproducible installs with Python 3.12.
+
+**1. Install uv** (if not already installed):
+```bash
+curl -Lsf https://astral.sh/uv/install.sh | sh
+```
+
+**2. Create the environment and install dependencies:**
+```bash
+uv venv --python 3.12
+source .venv/bin/activate          # Linux / macOS
+
+uv pip install -r requirements.txt
+```
+
+> **CPU-only install:** replace the `--extra-index-url` line with `https://download.pytorch.org/whl/cpu` in `requirements.txt`, or run:
+> ```bash
+> uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+> uv pip install -r requirements.txt --no-deps-for torch torchvision torchaudio
+> ```
+
+> **Graph encoder dependencies** (`torch-scatter`, `torch-sparse`, `torch-geometric`) are only needed for GVP / ProtSSN encoders. Skip them if you are using PLM-only evaluation.
+
+**3. Verify:**
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
 ## 📑 Results
 
 ### News
