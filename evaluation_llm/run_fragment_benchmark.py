@@ -262,7 +262,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Fragment-level LLM benchmark runner")
     parser.add_argument("--dataset_id", required=True, help="Example: VenusX_Res_Act_MF50")
     parser.add_argument("--experiment", default="E0", choices=sorted(EXPERIMENT_PRESETS))
-    parser.add_argument("--split", default="test", choices=["train", "valid", "validation", "test"])
+    parser.add_argument("--split", default="test", choices=["train", "valid", "test"])
     parser.add_argument("--label_card_style", choices=["name_only", "short_desc", "rich_desc"], default=None)
     parser.add_argument("--include_full_sequence", action="store_true", default=None)
     parser.add_argument("--no_full_sequence", action="store_false", dest="include_full_sequence")

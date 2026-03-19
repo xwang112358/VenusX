@@ -14,7 +14,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the fragment benchmark across a preset OpenRouter model set")
     parser.add_argument("--dataset_id", required=True, help="Example: VenusX_Res_Act_MF50")
     parser.add_argument("--experiment", default="E2", choices=["E0", "E1", "E2", "E3"])
-    parser.add_argument("--split", default="test", choices=["train", "valid", "validation", "test"])
+    parser.add_argument("--split", default="test", choices=["train", "valid", "test"])
     parser.add_argument("--model_set", default="starter", choices=list_model_sets())
     parser.add_argument("--label_card_style", choices=["name_only", "short_desc", "rich_desc"], default=None)
     parser.add_argument("--include_full_sequence", action="store_true", default=None)
