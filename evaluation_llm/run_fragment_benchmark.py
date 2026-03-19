@@ -20,7 +20,7 @@ from evaluation_llm.label_catalog import load_label_catalog
 from evaluation_llm.metrics import FragmentBenchmarkMetrics
 from evaluation_llm.model_backends import create_model_backend
 from evaluation_llm.prompt_and_parse import build_fragment_prompt, parse_model_response
-from evaluation_llm.records import ExampleResult, ExperimentSettings
+from evaluation_llm.records import ExampleResult, ExperimentSettings, Prediction
 
 
 EXPERIMENT_PRESETS = {
@@ -144,22 +144,42 @@ def run_single_benchmark(
         leave=False,
         disable=not sys.stderr.isatty(),
     ):
-        prompt = build_fragment_prompt(example, catalog, settings)
-        response = backend.generate(prompt=prompt, example=example, label_cards=label_cards)
-        prediction = parse_model_response(response.raw_text, catalog)
+        prompt = ""
+        raw_response = ""
+        response_metadata: dict[str, object] = {"mode": settings.model_provider}
+        try:
+            prompt = build_fragment_prompt(example, catalog, settings)
+            response = backend.generate(prompt=prompt, example=example, label_cards=label_cards)
+            raw_response = response.raw_text
+            response_metadata = response.metadata
+            prediction = parse_model_response(response.raw_text, catalog)
+        except Exception as exc:
+            prediction = Prediction(
+                top_ids=tuple(),
+                confidence=None,
+                abstain=False,
+                parse_success=False,
+                invalid_labels=tuple(),
+                parse_error=f"backend_error: {type(exc).__name__}: {exc}",
+                extracted_payload=None,
+            )
+            response_metadata = {
+                **response_metadata,
+                "backend_error": f"{type(exc).__name__}: {exc}",
+            }
         predicted_top_id = prediction.top_ids[0] if prediction.top_ids else None
         result = ExampleResult(
             example=example,
             prompt=prompt,
-            raw_response=response.raw_text,
-            response_metadata=response.metadata,
+            raw_response=raw_response,
+            response_metadata=response_metadata,
             prediction=prediction,
             seen_in_train=example.interpro_id in train_label_ids,
             predicted_top_id=predicted_top_id,
         )
         results.append(result)
         metrics.update(result)
-        if not prediction.parse_success or prediction.invalid_labels:
+        if not prediction.parse_success or prediction.invalid_labels or "backend_error" in response_metadata:
             errors.append(result.to_dict())
 
     summary = metrics.compute()
@@ -170,12 +190,13 @@ def run_single_benchmark(
 
 
 def _score_summary(metrics: dict) -> tuple:
-    overall = metrics["overall"]
+    paper = metrics["main_paper_table"]
     return (
-        overall.get("top1_acc") or 0.0,
-        overall.get("macro_f1") or 0.0,
-        overall.get("top5_acc") or 0.0,
-        overall.get("parse_success_rate") or 0.0,
+        paper.get("accuracy") or 0.0,
+        paper.get("macro_f1") or 0.0,
+        paper.get("mcc") or 0.0,
+        paper.get("macro_precision") or 0.0,
+        paper.get("macro_recall") or 0.0,
     )
 
 

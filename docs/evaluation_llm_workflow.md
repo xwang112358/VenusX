@@ -181,7 +181,7 @@ For every example, `build_fragment_prompt(...)` in `evaluation_llm/prompt_and_pa
 - the fragment parts and residue ranges
 - optional full-sequence context
 - the full label catalog rendered as candidate labels
-- the required JSON output schema
+- the required JSON output schema with up to 5 ranked `top_ids`
 
 Prompt differences across experiments are small and controlled.
 
@@ -211,6 +211,8 @@ For OpenRouter runs:
 - `parse_success`
 - `invalid_labels`
 
+`top_ids` is a ranked list with at most 5 candidate accessions.
+
 The parser is intentionally forgiving:
 
 - it first tries to extract a JSON object
@@ -223,16 +225,37 @@ This keeps evaluation robust against small formatting mistakes.
 
 Each example becomes an `ExampleResult`.
 
+If one backend call fails, the runner records that example as an error and continues with the rest of the dataset. This is helpful for paid API runs because a single network or provider issue does not kill the full benchmark job.
+
 `FragmentBenchmarkMetrics` then updates:
 
-- `top1_acc`
+- `main_paper_table`
+- `supplemental_llm_table`
+- `details`
+
+`main_paper_table` contains:
+
+- `accuracy`
+- `macro_precision`
+- `macro_recall`
+- `macro_f1`
+- `mcc`
+
+`supplemental_llm_table` contains:
+
 - `top3_acc`
 - `top5_acc`
-- `macro_f1`
-- `per_class_f1`
 - `parse_success_rate`
 - `invalid_label_rate`
 - `abstain_rate`
+- `coverage`
+- `selective_accuracy`
+
+`details` contains:
+
+- `per_class_precision`
+- `per_class_recall`
+- `per_class_f1`
 
 It also computes slices for:
 
@@ -245,6 +268,13 @@ Finally the run writes artifacts to:
 ```text
 artifacts/evaluation_llm/<dataset_id>/<run_name>/
 ```
+
+The main files in a run directory are:
+
+- `resolved_config.json`
+- `metrics.json`
+- `records.jsonl`
+- `errors.jsonl`
 
 ## 4. Experiment Presets
 
@@ -289,10 +319,11 @@ The suite logic is:
 1. Start from an `MF50` dataset.
 2. Run `E1`, `E2`, and `E3` on the validation split.
 3. Pick the best setting by:
-   - `top1_acc`
+   - `accuracy`
    - then `macro_f1`
-   - then `top5_acc`
-   - then `parse_success_rate`
+   - then `mcc`
+   - then `macro_precision`
+   - then `macro_recall`
 4. Freeze the winning setup.
 5. Evaluate that frozen setup on:
    - `MF50`

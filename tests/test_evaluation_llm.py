@@ -88,6 +88,8 @@ class PromptAndParsingTests(unittest.TestCase):
         prompt_a = build_fragment_prompt(example, catalog, settings)
         prompt_b = build_fragment_prompt(example, catalog, settings)
         self.assertEqual(prompt_a, prompt_b)
+        self.assertIn("at most 5 candidates", prompt_a)
+        self.assertIn("return between 1 and 5 candidate accessions", prompt_a)
 
         exact = parse_model_response(
             f'{{"top_ids":["{example.interpro_id}"],"confidence":0.9,"abstain":false}}',
@@ -101,6 +103,16 @@ class PromptAndParsingTests(unittest.TestCase):
             catalog,
         )
         self.assertEqual(name_only.top_ids, ("IPR000138",))
+
+        sample_ids = [card.accession for card in catalog.sorted_cards()[:6]]
+        max_five = parse_model_response(
+            '{"top_ids":'
+            + str(sample_ids).replace("'", '"')
+            + ',"confidence":0.7,"abstain":false}',
+            catalog,
+        )
+        self.assertEqual(len(max_five.top_ids), 5)
+        self.assertEqual(max_five.top_ids, tuple(sample_ids[:5]))
 
         invalid = parse_model_response("not json and no accession", catalog)
         self.assertFalse(invalid.parse_success)
@@ -152,9 +164,15 @@ class MetricTests(unittest.TestCase):
             metrics.update(result)
 
         summary = metrics.compute()
-        self.assertEqual(summary["overall"]["top1_acc"], 0.333333)
-        self.assertEqual(summary["overall"]["top3_acc"], 0.666667)
-        self.assertEqual(summary["overall"]["parse_success_rate"], 0.666667)
+        self.assertEqual(summary["main_paper_table"]["accuracy"], 0.333333)
+        self.assertEqual(summary["main_paper_table"]["macro_precision"], 0.166667)
+        self.assertEqual(summary["main_paper_table"]["macro_recall"], 0.333333)
+        self.assertEqual(summary["main_paper_table"]["macro_f1"], 0.222222)
+        self.assertEqual(summary["main_paper_table"]["mcc"], 0.204124)
+        self.assertEqual(summary["supplemental_llm_table"]["top3_acc"], 0.666667)
+        self.assertEqual(summary["supplemental_llm_table"]["parse_success_rate"], 0.666667)
+        self.assertEqual(summary["supplemental_llm_table"]["coverage"], 0.666667)
+        self.assertEqual(summary["supplemental_llm_table"]["selective_accuracy"], 0.5)
 
 
 class RunnerPresetTests(unittest.TestCase):
@@ -268,11 +286,31 @@ class EndToEndSmokeTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmpdir:
             metrics, run_dir = run_single_benchmark(settings, artifact_root=Path(tmpdir))
-            self.assertEqual(metrics["overall"]["top1_acc"], 1.0)
+            self.assertEqual(metrics["main_paper_table"]["accuracy"], 1.0)
             self.assertTrue((run_dir / "resolved_config.json").exists())
             self.assertTrue((run_dir / "metrics.json").exists())
             self.assertTrue((run_dir / "records.jsonl").exists())
             self.assertTrue((run_dir / "errors.jsonl").exists())
+
+    def test_run_single_continues_when_backend_fails_for_example(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            replay_path = Path(tmpdir) / "missing.jsonl"
+            replay_path.write_text('{"uid":"does-not-match","raw_text":"{\\"top_ids\\":[\\"IPR000138\\"],\\"abstain\\":false}"}\n')
+            settings = ExperimentSettings(
+                dataset_id="VenusX_Res_Act_MF50",
+                split="test",
+                experiment_name="backend_error_smoke",
+                label_card_style="name_only",
+                model_provider="replay",
+                model_name=str(replay_path),
+                max_examples=1,
+            )
+
+            metrics, run_dir = run_single_benchmark(settings, artifact_root=Path(tmpdir))
+            self.assertEqual(metrics["main_paper_table"]["count"], 1)
+            self.assertEqual(metrics["main_paper_table"]["accuracy"], 0.0)
+            self.assertEqual(metrics["supplemental_llm_table"]["parse_success_rate"], 0.0)
+            self.assertTrue((run_dir / "errors.jsonl").read_text().strip())
 
 
 if __name__ == "__main__":

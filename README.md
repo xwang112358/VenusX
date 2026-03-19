@@ -69,6 +69,7 @@ Prompt/output contract:
 {"top_ids":["IPR000138"],"confidence":0.87,"abstain":false}
 ```
 
+- `top_ids` may contain up to 5 ranked candidate accessions.
 - `top_ids[0]` is treated as the final prediction.
 - Predictions are normalized against the label catalog by InterPro accession.
 
@@ -76,13 +77,31 @@ Current evaluation mode:
 
 - `full_catalog`: evaluate against the full `des.json` catalog in a single-turn classification setup.
 
-Metrics:
+Metrics are now reported in two groups.
 
-- `top1_acc`, `top3_acc`, `top5_acc`
-- `macro_f1`, `per_class_f1`
-- parse success rate
-- invalid-label rate
-- abstain rate
+Main paper table:
+
+- `accuracy`
+- `macro_precision`
+- `macro_recall`
+- `macro_f1`
+- `mcc`
+
+Supplemental LLM table:
+
+- `top3_acc`
+- `top5_acc`
+- `parse_success_rate`
+- `invalid_label_rate`
+- `abstain_rate`
+- `coverage`
+- `selective_accuracy`
+
+Additional analysis:
+
+- `per_class_precision`
+- `per_class_recall`
+- `per_class_f1`
 
 Slice reports are also produced for:
 
@@ -100,9 +119,9 @@ Each run saves:
 
 - resolved config
 - dataset/catalog alignment summary
-- metrics summary
+- metrics summary with `main_paper_table`, `supplemental_llm_table`, and slices
 - per-example records with prompts, candidates, raw responses, and parsed outputs
-- error records for parse failures or invalid labels
+- error records for parse failures, invalid labels, or backend failures
 
 ### 3. Example commands
 

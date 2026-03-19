@@ -9,6 +9,7 @@ from evaluation_llm.records import ExperimentSettings, FragmentExample, LabelCar
 
 
 ACCESSION_RE = re.compile(r"IPR\d+")
+MAX_TOP_IDS = 5
 
 
 def _render_label_card(card: LabelCard, style: str) -> str:
@@ -59,7 +60,7 @@ def build_fragment_prompt(
         "You are doing fragment-level protein function label selection.",
         "Choose the best InterPro accession for the fragment from the candidate labels.",
         'Return JSON only with the schema {"top_ids":["IPR..."],"confidence":0.0,"abstain":false}.',
-        "Use canonical InterPro accessions in top_ids, ordered from best to worst.",
+        f"Use canonical InterPro accessions in top_ids, ordered from best to worst, with at most {MAX_TOP_IDS} candidates.",
         f"Experiment: {settings.experiment_name}",
         f"Candidate count: {len(catalog.cards)}",
     ]
@@ -86,7 +87,8 @@ def build_fragment_prompt(
     )
     sections.append("Candidate labels:\n" + rendered_cards)
     sections.append(
-        "If you are uncertain, set abstain=true and leave top_ids empty. "
+        f"If you are uncertain, set abstain=true and leave top_ids empty. "
+        f"If you do answer, return between 1 and {MAX_TOP_IDS} candidate accessions. "
         "Do not invent accessions outside the candidate list."
     )
     return "\n\n".join(sections)
@@ -174,6 +176,8 @@ def parse_model_response(raw_text: str, catalog: LabelCatalog) -> Prediction:
                 invalid_labels.append(raw_id)
             elif accession not in normalized_ids:
                 normalized_ids.append(accession)
+            if len(normalized_ids) >= MAX_TOP_IDS:
+                break
 
         raw_confidence = payload.get("confidence")
         if isinstance(raw_confidence, (int, float)):
@@ -187,6 +191,8 @@ def parse_model_response(raw_text: str, catalog: LabelCatalog) -> Prediction:
             accession = catalog.resolve_identifier(raw_id)
             if accession and accession not in accessions:
                 accessions.append(accession)
+            if len(accessions) >= MAX_TOP_IDS:
+                break
         normalized_ids = accessions
         parse_success = bool(accessions)
         parse_error = None if parse_success else "No valid JSON object or InterPro accession found"
