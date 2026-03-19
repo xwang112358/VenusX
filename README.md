@@ -1,150 +1,250 @@
-# VenusX: Unlocking Fine-Grained Functional Understanding of Proteins
+# VenusX
 
-## 🚀 Introduction
+VenusX is a fine-grained protein benchmark with residue-, fragment-, and domain-level annotations.
+This repo now includes a standalone fragment-level LLM benchmarking module in `evaluation_llm/` for testing general LLMs on InterPro label selection.
 
-**VenusX** is a large-scale benchmark for fine-grained protein functional annotation and pairing at residue, fragment, and domain levels.
+## Setup with uv (Python 3.12)
 
-<img src="img/framework.png" alt="Logo">
+Use `uv` to create a Python 3.12 environment and install the project dependencies:
 
-## uv dependencies
-
-Recommended for fast, reproducible installs with Python 3.12.
-
-**1. Install uv** (if not already installed):
-```bash
-curl -Lsf https://astral.sh/uv/install.sh | sh
-```
-
-**2. Create the environment and install dependencies:**
 ```bash
 uv venv --python 3.12
-source .venv/bin/activate          # Linux / macOS
-
+source .venv/bin/activate
 uv pip install -r requirements.txt
 ```
 
-> **CPU-only install:** replace the `--extra-index-url` line with `https://download.pytorch.org/whl/cpu` in `requirements.txt`, or run:
-> ```bash
-> uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-> uv pip install -r requirements.txt --no-deps-for torch torchvision torchaudio
-> ```
 
-> **Graph encoder dependencies** (`torch-scatter`, `torch-sparse`, `torch-geometric`) are only needed for GVP / ProtSSN encoders. Skip them if you are using PLM-only evaluation.
+## Fragment-Level LLM Benchmark
 
-**3. Verify:**
+### 1. What are we doing here?
+
+The new fragment-level benchmark evaluates whether a general LLM can assign the correct InterPro label to a protein fragment.
+
+The benchmark currently targets:
+
+- `VenusX_Res_Act_MF50/MF70/MF90`
+- `VenusX_Res_BindI_MF50/MF70/MF90`
+
+Each evaluation example is built directly from the local CSV files in `data/interpro_2503/...`:
+
+- `seq_fragment` is the fragment input.
+- `seq_full`, `start`, and `end` provide optional full-sequence context and explicit fragment ranges.
+- `interpro_id` is the canonical gold label.
+- `interpro_label` is treated as dataset-local bookkeeping only.
+
+The label space comes from the matching `*_des.json` file:
+
+- `data/interpro_2503/active_site/active_site_des.json`
+- `data/interpro_2503/binding_site/binding_site_des.json`
+
+Each label card contains an InterPro accession, name, cleaned description, GO terms, literature count, and a deterministic short description used for prompting.
+
+The reduced framework is organized around a few direct files:
+
+- `evaluation_llm/run_fragment_benchmark.py`: CLI entrypoint and suite logic
+- `evaluation_llm/fragment_dataset.py`: dataset lookup and CSV loading
+- `evaluation_llm/label_catalog.py`: `des.json` loading and label normalization
+- `evaluation_llm/prompt_and_parse.py`: prompt construction and response parsing
+- `evaluation_llm/model_backends.py`: mock, replay, and placeholder agent backends
+- `evaluation_llm/metrics.py`: metric computation
+- `evaluation_llm/records.py`: simple dataclasses used across the benchmark
+
+### 2. How do we evaluate?
+
+The module currently keeps the experiment ladder intentionally simple:
+
+- `E0`: smoke test with a mock model.
+- `E1`: full open catalog, fragment only, `accession + name`.
+- `E2`: full open catalog, fragment only, `accession + name + short_desc`.
+- `E3`: same as `E2`, plus full-sequence context with fragment tags.
+
+Prompt/output contract:
+
+- The model must return JSON only.
+- Canonical format:
+
+```json
+{"top_ids":["IPR000138"],"confidence":0.87,"abstain":false}
+```
+
+- `top_ids[0]` is treated as the final prediction.
+- Predictions are normalized against the label catalog by InterPro accession.
+
+Current evaluation mode:
+
+- `full_catalog`: evaluate against the full `des.json` catalog in a single-turn classification setup.
+
+Metrics:
+
+- `top1_acc`, `top3_acc`, `top5_acc`
+- `macro_f1`, `per_class_f1`
+- parse success rate
+- invalid-label rate
+- abstain rate
+
+Slice reports are also produced for:
+
+- seen-in-train vs unseen-in-train labels
+- single-fragment vs multi-fragment examples
+- short / medium / long fragment lengths
+
+Artifacts are written to:
+
+```text
+artifacts/evaluation_llm/<dataset_id>/<run_name>/
+```
+
+Each run saves:
+
+- resolved config
+- dataset/catalog alignment summary
+- metrics summary
+- per-example records with prompts, candidates, raw responses, and parsed outputs
+- error records for parse failures or invalid labels
+
+### 3. Example commands
+
+Smoke test with the built-in mock adapter:
+
 ```bash
-python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+python -m evaluation_llm \
+  --dataset_id VenusX_Res_Act_MF50 \
+  --experiment E0
 ```
 
-## 📑 Results
-
-### News
-
-- 2026-02-25: **The newest implementation has been transfered to the VenusFactory repository.** [Github](https://github.com/AI4Protein/VenusFactory)
-- 2026-01-26: VenusX is accepted by ICLR 2026. [Paper](https://openreview.net/forum?id=zcmL592XRG)
-
-### Paper Results
-
-VenusX benchmarks fine-grained protein understanding across multiple subprotein levels through three tasks: 
-
-- residue-level binary classification: identifying functionally important residues, 
-- fragment-level multi-class classification: classifying fragments by biological role, 
-- pairwise functional similarity scoring: matching functionally similar proteins or substructures without requiring explicit function labels.
-
-Benchmarking protein models on VenusX reveals performance gaps between global and fine-grained tasks, highlighting the need for more robust and interpretable models.
-### Baselines
-<details>
-<summary>Table: Summary of baseline models (methods) by input modality</summary>
-
-**Task** indicates evaluation scope:  
-- "All" for all three tasks  
-- "Sup." for supervised tasks only  
-- "Pair" for unsupervised pairwise similarity
-
-| Type              | Model (Method)        | Version        | Task  | # Params | # Train. Params | Embed. Dim | Implementation |
-|-------------------|--------------|----------------|-------|----------|------------------|-------------|----------------|
-| **Sequence-Only** | ESM2     | t30            | All   | 150M     | 410K             | 640         | [HF: ESM2-t30](https://huggingface.co/facebook/esm2_t30_150M_UR50D) |
-|                   |  ESM2            | t33            | All   | 652M     | 1.6M             | 1,280       | [HF: ESM2-t33](https://huggingface.co/facebook/esm2_t33_650M_UR50D) |
-|                   |  ESM2        | t36            | Pair  | 3,000M   | --               | 2,560       | [HF: ESM2-t36](https://huggingface.co/facebook/esm2_t36_3B_UR50D) |
-|                   | ESM1b        | t33            | Pair  | 652M     | --               | 1,280       | [HF: ESM-1b](https://huggingface.co/facebook/esm1b_t33_650M_UR50S) |
-|                   | ProtBert     | uniref         | All   | 420M     | 1.0M             | 1,024       | [HF: ProtBert](https://huggingface.co/Rostlab/prot_bert_bfd) |
-|                   | ProtT5       | xl_uniref50    | Pair  | 3,000M   | --               | 1,024       | [HF: ProtT5](https://huggingface.co/Rostlab/prot_t5_xl_uniref50) |
-|                   | Ankh         | base           | All   | 450M     | 591K             | 768         | [HF: Ankh](https://huggingface.co/ElnaggarLab/ankh-base) |
-|                   | TM-vec       | swiss_large    | Pair  | 3,034M   | --               | 512         | [GitHub: TM-vec](https://github.com/tymor22/tm-vec) |
-|                   | ProstT5      | AA2fold        | Pair  | 3,000M   | --               | 1024        | [HF: ProstT5](https://huggingface.co/Rostlab/ProstT5) |
-|                   | BLAST        | --             | Pair  | --       | --               | --          | [Conda: BLAST](https://anaconda.org/bioconda/blast) |
-| **Sequence-Structure** | SaProt     | 35M_AF2        | All   | 35M      | 231K             | 480         | [HF: SaProt-AF2](https://huggingface.co/westlake-repl/SaProt_35M_AF2) |
-|                        | SaProt     | 650M_PDB       | All   | 650M     | 1.6M             | 1,280       | [HF: SaProt-PDB](https://huggingface.co/westlake-repl/SaProt_650M_PDB) |
-|                        | ProtSSN        | k20_h512       | All   | 800M     | 1.6M             | 1,280       | [HF: ProtSSN](https://huggingface.co/ai4protein/ProtSSN) |
-|                        | ESM-IF1        | --             | Pair  | 148M     | --               | 512         | [HF: ESM-IF1](https://huggingface.co/katielink/esm_if1_gvp4_t16_142M_UR50) |
-|                        | MIS-ST         | --             | Pair  | 643M     | --               | 256         | [GitHub: MIF-ST](https://github.com/microsoft/protein-sequence-models) |
-|                        | Foldseek       | 3Di-AA         | Pair  | --       | --               | --          | [Conda: Foldseek](https://anaconda.org/bioconda/foldseek) |
-| **Structure-Only**     | GVP-GNN        | 3-layers       | Sup.  | 3M       | 3M               | 512         | [GitHub: GVP](https://github.com/drorlab/gvp-pytorch) |
-|                        | Foldseek       | 3Di            | Pair  | --       | --               | --          | [Conda: Foldseek](https://anaconda.org/bioconda/foldseek) |
-|                        | TM-align       | mean           | Pair  | --       | --               | --          | [Conda: TM-align](https://anaconda.org/bioconda/tmalign) |
-
-</details>
-
-## 🛫 Requirement
-### Conda Environment
-
-Please make sure you have installed **[Anaconda3](https://www.anaconda.com/download)** or **[Miniconda3](https://docs.conda.io/projects/miniconda/en/latest/)**.
+Full-catalog run with short descriptions:
 
 ```bash
-git clone https://github.com/AI4Protein/VenusX.git
-cd VenusX
+python -m evaluation_llm \
+  --dataset_id VenusX_Res_BindI_MF50 \
+  --experiment E2 \
+  --model_provider mock \
+  --model_name oracle
 ```
-You can create the required environment using the following two methods.
+
+Validation-selection suite on `MF50`, then frozen evaluation on `MF50/MF70/MF90`:
+
 ```bash
-conda env create -f environment.yaml
-conda activate VenusX
+python -m evaluation_llm \
+  --dataset_id VenusX_Res_Act_MF50 \
+  --experiment E2 \
+  --model_provider mock \
+  --model_name oracle \
+  --suite
 ```
-or
+
+Replay pre-generated model outputs from a JSONL file:
+
 ```bash
-conda create -n VenusX python=3.8.18
-conda activate VenusX
-pip install -r requirements.txt
-```
-### Hardware
-
-All data processing, baseline experiments were conducted on 16 NVIDIA RTX 4090 GPUs. If you plan to experiment with deep learning models with larger parameters, additional hardware resources may be necessary.
-
-## 🧬 Start with VenuX
-
-### Dataset Information
-
-The dataset for the VenuX Benchmark can be viewed and downloaded at **[Huggingface:AI4Protein:Venux_Dataset](https://huggingface.co/collections/AI4Protein/venusx-dataset-6825519dbac4963f77db79ba)**. 
-For example: **[AI4Protein/VenusX_Res_Act_MF50](https://huggingface.co/datasets/AI4Protein/VenusX_Res_Act_MF50)** refers to an active site dataset used for identifying functionally important residues. The dataset is clustered based on 50% fragment similarity and divided into training, validation and test sets according to mixed families.
-
-<img src="img/dataset_res.png" alt="Logo">
-
-<img src="img/datasets_frag_and_pair.png" alt="Logo">
-
-### Train
-
-(1) The [`VenusX/script/example/train/train_token_cls.sh`](https://github.com/AI4Protein/VenusX/blob/main/script/example/train/train_token_cls.sh) script demonstrates how to train a deep learning model for identifying functionally important residues.
-
-(2) The [`VenusX/script/example/train/train_fragment_cls.sh`](https://github.com/AI4Protein/VenusX/blob/main/script/example/train/train_fragment_cls.sh) script demonstrates how to train a deep learning model for classifying fragments according to biological roles.
-
-### Compute protein (fragment) embeddings
-
-Folder [`VenusX/script/example/embedding`](https://github.com/AI4Protein/VenusX/blob/main/script/example/embedding) contains scripts for obtaining protein or fragment embeddings using deep learning models and traditional methods. Note: Please set the path of the dataset in the script according to the actual situation.
-
-
-## 🙌 Citation
-
-If you find this work useful, please consider citing:
-
-```bibtex
-@inproceedings{tan2026venusx,
-   title={{VenusX}: Unlocking Fine-Grained Functional Understanding of Proteins},
-   author={Yang Tan and Wenrui Gou and Bozitao Zhong and Huiqun Yu and Liang Hong and Bingxin Zhou},
-   booktitle={The Fourteenth International Conference on Learning Representations},
-   year={2026},
-   url={https://openreview.net/forum?id=zcmL592XRG}
-}
+python -m evaluation_llm \
+  --dataset_id VenusX_Res_BindI_MF50 \
+  --experiment E2 \
+  --model_provider replay \
+  --model_name path/to/responses.jsonl
 ```
 
-## 📝 License
+Replay JSONL format:
 
-This project is licensed under the terms of the [CC-BY-NC-ND-4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode) license.
+```json
+{"uid":"P21671","raw_text":"{\"top_ids\":[\"IPR018247\"],\"confidence\":0.91,\"abstain\":false}"}
+```
+
+Run the benchmark tests:
+
+```bash
+python -m unittest tests.test_evaluation_llm
+```
+
+## OpenRouter Setup
+
+You can call hosted LLM APIs through OpenRouter by saving your API key in a local `.env` file and using `--model_provider openrouter`.
+
+Create a local `.env` from the committed example:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` and fill in your real key:
+
+```dotenv
+OPENROUTER_API_KEY="your_openrouter_api_key"
+```
+
+That is the only field you need for normal benchmark runs.
+
+Optional `.env` fields if you want to tune request behavior:
+
+```dotenv
+OPENROUTER_MAX_TOKENS=256
+OPENROUTER_TIMEOUT_SECONDS=120
+```
+
+Notes:
+
+- `.env` is ignored by git and should not be committed.
+- `.env.example` is safe to commit and is included as a template.
+- The benchmark automatically loads the repo-root `.env` file when `model_provider=openrouter`.
+- `OPENROUTER_HTTP_REFERER` and `OPENROUTER_TITLE` are not required. They are only useful if you want app attribution on OpenRouter.
+
+Example OpenRouter run:
+
+```bash
+python -m evaluation_llm \
+  --dataset_id VenusX_Res_Act_MF50 \
+  --experiment E2 \
+  --model_provider openrouter \
+  --model_name openai/gpt-4.1-mini
+```
+
+The benchmark sends one prompt per fragment example to OpenRouter's chat completions API and then reuses the same parser, metrics, and artifact writing flow as the mock and replay backends.
+
+### Suggested starter models
+
+For a first pass, use a small but representative cross-family pack instead of jumping straight to expensive flagship models. The current `starter` set in `evaluation_llm/model_sets.py` is:
+
+- `google/gemini-2.5-flash-lite`
+- `openai/gpt-4.1-mini`
+- `deepseek/deepseek-chat-v3.1`
+- `meta-llama/llama-3.3-70b-instruct`
+- `qwen/qwen-2.5-72b-instruct`
+
+Why this set:
+
+- it gives you 2 inexpensive closed-model anchors and 3 strong open-family baselines
+- these model families show up often in current benchmark comparisons
+- they are much cheaper than frontier flagship models while still being strong enough to make the benchmark informative
+
+There is also an `extended` set if you want to add:
+
+- `anthropic/claude-3.5-haiku`
+- `mistralai/mistral-small-3.2-24b-instruct`
+
+Run the whole starter pack with:
+
+```bash
+python -m evaluation_llm.run_openrouter_model_set \
+  --dataset_id VenusX_Res_Act_MF50 \
+  --experiment E2 \
+  --model_set starter
+```
+
+If you only want a very small initial paper-style table, I would start with:
+
+- `openai/gpt-4.1-mini`
+- `google/gemini-2.5-flash-lite`
+- `deepseek/deepseek-chat-v3.1`
+- `meta-llama/llama-3.3-70b-instruct`
+
+## Important Files
+
+- `evaluation_llm/run_fragment_benchmark.py`: CLI runner, experiment presets, suite mode, artifact writing
+- `evaluation_llm/run_openrouter_model_set.py`: helper runner for a preset pack of OpenRouter models
+- `evaluation_llm/fragment_dataset.py`: dataset lookup and fragment example construction
+- `evaluation_llm/label_catalog.py`: InterPro description catalog loading and short-description building
+- `evaluation_llm/prompt_and_parse.py`: prompt assembly and JSON parsing
+- `evaluation_llm/model_backends.py`: mock, replay, and OpenRouter-backed model calls
+- `evaluation_llm/model_sets.py`: curated starter and extended OpenRouter model packs
+- `evaluation_llm/metrics.py`: metrics and slice reporting
+- `evaluation_llm/records.py`: core benchmark dataclasses
+- `tests/test_evaluation_llm.py`: unit and smoke coverage

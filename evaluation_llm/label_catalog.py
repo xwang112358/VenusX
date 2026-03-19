@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from evaluation_llm.types import LabelCard
+from evaluation_llm.records import LabelCard
 
 
 HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -56,6 +56,10 @@ def build_short_desc(description: str, go_term_names: tuple[str, ...], max_words
     return summary
 
 
+def normalize_label_name(name: str) -> str:
+    return WHITESPACE_RE.sub(" ", name.strip().lower())
+
+
 @dataclass(frozen=True)
 class LabelCatalog:
     cards: tuple[LabelCard, ...]
@@ -88,19 +92,11 @@ class LabelCatalog:
             return matches[0].accession
         return None
 
-    def cards_for_accessions(self, accessions: list[str]) -> tuple[LabelCard, ...]:
-        cards = [self.by_accession[accession] for accession in accessions if accession in self.by_accession]
-        return tuple(sorted(cards, key=lambda card: card.accession))
-
     def sorted_cards(self) -> tuple[LabelCard, ...]:
         return tuple(sorted(self.cards, key=lambda card: card.accession))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {"cards": [card.to_dict() for card in self.cards]}
-
-
-def normalize_label_name(name: str) -> str:
-    return WHITESPACE_RE.sub(" ", name.strip().lower())
 
 
 def load_label_catalog(path: str | Path) -> LabelCatalog:

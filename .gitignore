@@ -129,6 +129,7 @@ celerybeat.pid
 
 # Environments
 .env
+!.env.example
 .venv
 env/
 venv/
@@ -226,4 +227,3 @@ croissant_files/
 # Root-level output CSVs (e.g. plddt stats)
 plddt_stats.csv
 plddt_summary.csv
-

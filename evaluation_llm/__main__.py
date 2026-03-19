@@ -1,4 +1,4 @@
-from evaluation_llm.runner import main
+from evaluation_llm.run_fragment_benchmark import main
 
 
 if __name__ == "__main__":

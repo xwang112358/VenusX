@@ -6,38 +6,28 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class RunConfig:
+class ExperimentSettings:
     dataset_id: str
     split: str = "test"
-    label_space: str = "open_catalog"
-    candidate_strategy: str = "full_catalog"
-    top_k: int = 10
-    prompt_template: str = "fragment_cls_v1"
+    experiment_name: str = "custom"
     label_card_style: str = "name_only"
     include_full_sequence: bool = False
-    few_shot_count: int = 0
     model_provider: str = "mock"
     model_name: str = "oracle"
     temperature: float = 0.0
     max_examples: int | None = None
-    experiment_name: str = "custom"
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "dataset_id": self.dataset_id,
             "split": self.split,
-            "label_space": self.label_space,
-            "candidate_strategy": self.candidate_strategy,
-            "top_k": self.top_k,
-            "prompt_template": self.prompt_template,
+            "experiment_name": self.experiment_name,
             "label_card_style": self.label_card_style,
             "include_full_sequence": self.include_full_sequence,
-            "few_shot_count": self.few_shot_count,
             "model_provider": self.model_provider,
             "model_name": self.model_name,
             "temperature": self.temperature,
             "max_examples": self.max_examples,
-            "experiment_name": self.experiment_name,
         }
 
     def slug(self) -> str:
@@ -45,11 +35,8 @@ class RunConfig:
             self.experiment_name,
             self.dataset_id,
             self.split,
-            self.candidate_strategy,
             self.label_card_style,
-            f"k{self.top_k}",
             f"ctx{int(self.include_full_sequence)}",
-            f"fs{self.few_shot_count}",
             self.model_provider,
             self.model_name.replace("/", "_"),
         ]
@@ -57,7 +44,7 @@ class RunConfig:
 
 
 @dataclass(frozen=True)
-class DatasetSpec:
+class DatasetInfo:
     dataset_id: str
     csv_dir: Path
     catalog_path: Path
@@ -142,36 +129,6 @@ class LabelCard:
 
 
 @dataclass(frozen=True)
-class CandidateRecord:
-    accession: str
-    score: float
-    rank: int
-    source: str
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "accession": self.accession,
-            "score": self.score,
-            "rank": self.rank,
-            "source": self.source,
-        }
-
-
-@dataclass(frozen=True)
-class PromptPackage:
-    prompt: str
-    candidate_cards: tuple[LabelCard, ...]
-    few_shot_examples: tuple[FragmentExample, ...] = field(default_factory=tuple)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "prompt": self.prompt,
-            "candidate_cards": [card.to_dict() for card in self.candidate_cards],
-            "few_shot_examples": [example.to_dict() for example in self.few_shot_examples],
-        }
-
-
-@dataclass(frozen=True)
 class ModelResponse:
     raw_text: str
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -184,7 +141,7 @@ class ModelResponse:
 
 
 @dataclass(frozen=True)
-class ParsedPrediction:
+class Prediction:
     top_ids: tuple[str, ...]
     confidence: float | None
     abstain: bool
@@ -206,37 +163,22 @@ class ParsedPrediction:
 
 
 @dataclass(frozen=True)
-class PromptContext:
+class ExampleResult:
     example: FragmentExample
-    config: RunConfig
-    candidate_records: tuple[CandidateRecord, ...]
-    candidate_cards: tuple[LabelCard, ...]
-    few_shot_examples: tuple[FragmentExample, ...] = field(default_factory=tuple)
-
-
-@dataclass(frozen=True)
-class EvaluationRecord:
-    example: FragmentExample
-    candidates: tuple[CandidateRecord, ...]
-    parsed: ParsedPrediction
     prompt: str
     raw_response: str
     response_metadata: dict[str, Any]
+    prediction: Prediction
     seen_in_train: bool
     predicted_top_id: str | None
-    candidate_hit: bool | None
-    prediction_in_candidates: bool | None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "example": self.example.to_dict(),
-            "candidates": [candidate.to_dict() for candidate in self.candidates],
-            "parsed": self.parsed.to_dict(),
             "prompt": self.prompt,
             "raw_response": self.raw_response,
             "response_metadata": self.response_metadata,
+            "prediction": self.prediction.to_dict(),
             "seen_in_train": self.seen_in_train,
             "predicted_top_id": self.predicted_top_id,
-            "candidate_hit": self.candidate_hit,
-            "prediction_in_candidates": self.prediction_in_candidates,
         }

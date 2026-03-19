@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from collections import defaultdict
-
-from evaluation_llm.datasets import fragment_length_bin
-from evaluation_llm.interfaces import MetricSuite
-from evaluation_llm.types import EvaluationRecord
+from evaluation_llm.fragment_dataset import fragment_length_bin
+from evaluation_llm.records import ExampleResult
 
 
 def _safe_rate(numerator: int, denominator: int) -> float | None:
@@ -36,27 +33,28 @@ def _compute_label_f1(gold_labels: list[str], predicted_labels: list[str]) -> tu
     return per_class, macro
 
 
-class FragmentMetricSuite(MetricSuite):
+class FragmentBenchmarkMetrics:
     def __init__(self) -> None:
-        self.records: list[EvaluationRecord] = []
+        self.results: list[ExampleResult] = []
 
-    def update(self, record: EvaluationRecord) -> None:
-        self.records.append(record)
+    def update(self, result: ExampleResult) -> None:
+        self.results.append(result)
 
     def compute(self) -> dict:
-        overall = self._summarize(self.records)
-        slices = {}
-        slices["seen_in_train"] = self._summarize([record for record in self.records if record.seen_in_train])
-        slices["unseen_in_train"] = self._summarize([record for record in self.records if not record.seen_in_train])
-        slices["multi_fragment"] = self._summarize([record for record in self.records if record.example.is_multi_fragment])
-        slices["single_fragment"] = self._summarize([record for record in self.records if not record.example.is_multi_fragment])
+        overall = self._summarize(self.results)
+        slices = {
+            "seen_in_train": self._summarize([result for result in self.results if result.seen_in_train]),
+            "unseen_in_train": self._summarize([result for result in self.results if not result.seen_in_train]),
+            "multi_fragment": self._summarize([result for result in self.results if result.example.is_multi_fragment]),
+            "single_fragment": self._summarize([result for result in self.results if not result.example.is_multi_fragment]),
+        }
 
         for length_bucket in ("short", "medium", "long"):
             slices[f"fragment_length::{length_bucket}"] = self._summarize(
                 [
-                    record
-                    for record in self.records
-                    if fragment_length_bin(record.example.fragment_length) == length_bucket
+                    result
+                    for result in self.results
+                    if fragment_length_bin(result.example.fragment_length) == length_bucket
                 ]
             )
 
@@ -65,13 +63,13 @@ class FragmentMetricSuite(MetricSuite):
             "slices": slices,
         }
 
-    def _summarize(self, records: list[EvaluationRecord]) -> dict:
-        count = len(records)
+    def _summarize(self, results: list[ExampleResult]) -> dict:
+        count = len(results)
         if count == 0:
             return {"count": 0}
 
-        gold_labels = [record.example.interpro_id for record in records]
-        predicted_labels = [record.predicted_top_id or "__NONE__" for record in records]
+        gold_labels = [result.example.interpro_id for result in results]
+        predicted_labels = [result.predicted_top_id or "__NONE__" for result in results]
         per_class_f1, macro_f1 = _compute_label_f1(gold_labels, predicted_labels)
 
         top1_hits = 0
@@ -80,35 +78,23 @@ class FragmentMetricSuite(MetricSuite):
         parse_success = 0
         invalid_label_examples = 0
         abstain_examples = 0
-        candidate_hits = 0
-        oracle_hits = 0
-        in_candidate_predictions = 0
-        retrieval_count = 0
 
-        for record in records:
-            predictions = list(record.parsed.top_ids)
-            if record.parsed.parse_success:
+        for result in results:
+            predictions = list(result.prediction.top_ids)
+            if result.prediction.parse_success:
                 parse_success += 1
-            if record.parsed.invalid_labels:
+            if result.prediction.invalid_labels:
                 invalid_label_examples += 1
-            if record.parsed.abstain:
+            if result.prediction.abstain:
                 abstain_examples += 1
-            if predictions[:1] == [record.example.interpro_id]:
+            if predictions[:1] == [result.example.interpro_id]:
                 top1_hits += 1
-            if record.example.interpro_id in predictions[:3]:
+            if result.example.interpro_id in predictions[:3]:
                 top3_hits += 1
-            if record.example.interpro_id in predictions[:5]:
+            if result.example.interpro_id in predictions[:5]:
                 top5_hits += 1
 
-            if record.candidate_hit is not None:
-                retrieval_count += 1
-                if record.candidate_hit:
-                    candidate_hits += 1
-                    oracle_hits += 1
-            if record.prediction_in_candidates is not None and record.prediction_in_candidates:
-                in_candidate_predictions += 1
-
-        summary = {
+        return {
             "count": count,
             "top1_acc": _safe_rate(top1_hits, count),
             "top3_acc": _safe_rate(top3_hits, count),
@@ -119,10 +105,3 @@ class FragmentMetricSuite(MetricSuite):
             "invalid_label_rate": _safe_rate(invalid_label_examples, count),
             "abstain_rate": _safe_rate(abstain_examples, count),
         }
-
-        if retrieval_count > 0:
-            summary["candidate_recall@K"] = _safe_rate(candidate_hits, retrieval_count)
-            summary["oracle_top1@K"] = _safe_rate(oracle_hits, retrieval_count)
-            summary["prediction_in_candidates_rate"] = _safe_rate(in_candidate_predictions, retrieval_count)
-
-        return summary

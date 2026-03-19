@@ -1,18 +1,64 @@
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
-from evaluation_llm.catalog import LabelCatalog
-from evaluation_llm.types import DatasetSpec, FragmentExample
+from evaluation_llm.label_catalog import LabelCatalog
+from evaluation_llm.records import DatasetInfo, FragmentExample
 
 
+DATASET_PATTERN = re.compile(r"^(VenusX_Res_(Act|BindI)_(MF50|MF70|MF90))$")
+TRACK_BY_FAMILY = {
+    "Act": "active_site",
+    "BindI": "binding_site",
+}
 SPLIT_FILE_MAP = {
     "train": "train.csv",
     "valid": "valid.csv",
     "validation": "valid.csv",
     "test": "test.csv",
 }
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def list_supported_dataset_ids() -> list[str]:
+    dataset_ids: list[str] = []
+    for family_code in TRACK_BY_FAMILY:
+        for similarity_split in ("MF50", "MF70", "MF90"):
+            dataset_ids.append(f"VenusX_Res_{family_code}_{similarity_split}")
+    return dataset_ids
+
+
+def get_dataset_info(dataset_id: str, root: Path | None = None) -> DatasetInfo:
+    root = root or repo_root()
+    match = DATASET_PATTERN.match(dataset_id)
+    if match is None:
+        raise ValueError(
+            f"Unsupported dataset_id={dataset_id!r}. "
+            f"Supported ids: {', '.join(list_supported_dataset_ids())}"
+        )
+
+    _, family_code, similarity_split = match.groups()
+    track_name = TRACK_BY_FAMILY[family_code]
+    csv_dir = root / "data" / "interpro_2503" / dataset_id
+    catalog_path = root / "data" / "interpro_2503" / track_name / f"{track_name}_des.json"
+    if not csv_dir.exists():
+        raise FileNotFoundError(f"CSV directory not found: {csv_dir}")
+    if not catalog_path.exists():
+        raise FileNotFoundError(f"Catalog file not found: {catalog_path}")
+
+    return DatasetInfo(
+        dataset_id=dataset_id,
+        csv_dir=csv_dir,
+        catalog_path=catalog_path,
+        track_name=track_name,
+        family_code=family_code,
+        similarity_split=similarity_split,
+    )
 
 
 def _split_pipe_text(raw: str) -> list[str]:
@@ -51,7 +97,7 @@ def _build_example(row: dict[str, str], dataset_id: str, split: str) -> Fragment
 
 
 def load_fragment_examples(
-    spec: DatasetSpec,
+    dataset_info: DatasetInfo,
     split: str,
     max_examples: int | None = None,
 ) -> list[FragmentExample]:
@@ -59,7 +105,7 @@ def load_fragment_examples(
     if split_key not in SPLIT_FILE_MAP:
         raise ValueError(f"Unsupported split={split!r}. Use one of: {sorted(SPLIT_FILE_MAP)}")
 
-    csv_path = spec.csv_dir / SPLIT_FILE_MAP[split_key]
+    csv_path = dataset_info.csv_dir / SPLIT_FILE_MAP[split_key]
     if not csv_path.exists():
         raise FileNotFoundError(f"Split file not found: {csv_path}")
 
@@ -67,13 +113,13 @@ def load_fragment_examples(
     with csv_path.open() as handle:
         reader = csv.DictReader(handle)
         for row in reader:
-            examples.append(_build_example(row, dataset_id=spec.dataset_id, split=split_key))
+            examples.append(_build_example(row, dataset_id=dataset_info.dataset_id, split=split_key))
             if max_examples is not None and len(examples) >= max_examples:
                 break
     return examples
 
 
-def inspect_catalog_alignment(examples: list[FragmentExample], catalog: LabelCatalog) -> dict[str, object]:
+def summarize_catalog_alignment(examples: list[FragmentExample], catalog: LabelCatalog) -> dict[str, object]:
     missing_accessions: list[str] = []
     inconsistent_labels: dict[int, set[str]] = {}
     label_to_accessions: dict[int, set[str]] = {}
@@ -114,8 +160,8 @@ def inspect_catalog_alignment(examples: list[FragmentExample], catalog: LabelCat
     }
 
 
-def load_train_label_ids(spec: DatasetSpec) -> set[str]:
-    return {example.interpro_id for example in load_fragment_examples(spec, split="train")}
+def load_train_label_ids(dataset_info: DatasetInfo) -> set[str]:
+    return {example.interpro_id for example in load_fragment_examples(dataset_info, split="train")}
 
 
 def fragment_length_bin(length: int) -> str:
