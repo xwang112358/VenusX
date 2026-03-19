@@ -16,6 +16,8 @@ uv pip install -r requirements.txt
 
 ## Fragment-Level LLM Benchmark
 
+For a code-oriented walkthrough of the evaluation pipeline, see `docs/evaluation_llm_workflow.md`.
+
 ### 1. What are we doing here?
 
 The new fragment-level benchmark evaluates whether a general LLM can assign the correct InterPro label to a protein fragment.
