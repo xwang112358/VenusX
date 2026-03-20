@@ -229,6 +229,61 @@ class PlaceholderAgentBackend:
         )
 
 
+class InterProAgentBackend:
+    """Thin adapter that wraps ProteinAgent for use inside the evaluation_llm benchmark.
+
+    Translates AgentResult → ModelResponse so that the existing parse_model_response()
+    pipeline can score agent predictions alongside LLM baselines.
+
+    Environment variables
+    ---------------------
+    ANTHROPIC_API_KEY     — passed to ProteinAgent / Claude
+    INTERPROSCAN_EMAIL    — required by EBI terms of service
+    """
+
+    def __init__(self, model_name: str = "claude-opus-4-6") -> None:
+        _load_default_env_file()
+        from protein_agent.agent import ProteinAgent
+
+        email = os.environ.get("INTERPROSCAN_EMAIL", "")
+        if not email:
+            raise ValueError(
+                "INTERPROSCAN_EMAIL is required for model_provider='interpro_agent'. "
+                "Set it in your environment or .env file."
+            )
+        self._agent = ProteinAgent(email=email, model=model_name)
+
+    def generate(
+        self,
+        prompt: str,
+        example: FragmentExample,
+        label_cards: tuple[LabelCard, ...],
+    ) -> ModelResponse:
+        sequence = example.seq_full or example.compact_fragment()
+        agent_result = self._agent.run(sequence)
+
+        # Map site annotations to catalog accessions (ranked by site type priority)
+        site_type_rank = {"ACTIVE_SITE": 0, "BINDING_SITE": 1, "CONSERVED_SITE": 2}
+        ranked = sorted(
+            agent_result.site_annotations,
+            key=lambda a: site_type_rank.get(a.site_type, 99),
+        )
+        top_ids = [a.accession for a in ranked][:3]
+
+        payload = {
+            "top_ids": top_ids,
+            "reasoning_summary": (
+                f"InterProScan returned {len(agent_result.annotations)} annotation(s); "
+                f"{len(agent_result.site_annotations)} functional site(s) identified."
+            ),
+            "abstain": len(top_ids) == 0,
+        }
+        return ModelResponse(
+            raw_text=json.dumps(payload),
+            metadata=agent_result.metadata,
+        )
+
+
 def create_model_backend(
     model_provider: str,
     model_name: str,
@@ -243,4 +298,6 @@ def create_model_backend(
         return OpenRouterModelBackend(model_name=model_name, temperature=temperature)
     if model_provider == "agent":
         return PlaceholderAgentBackend()
+    if model_provider == "interpro_agent":
+        return InterProAgentBackend(model_name=model_name)
     raise ValueError(f"Unsupported model_provider={model_provider!r}")

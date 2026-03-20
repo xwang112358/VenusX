@@ -31,3 +31,6 @@ biopython
 tqdm
 pyyaml
 requests
+
+# Agent
+anthropic>=0.40.0
