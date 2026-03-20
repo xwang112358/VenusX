@@ -169,7 +169,6 @@ class ExampleResult:
     raw_response: str
     response_metadata: dict[str, Any]
     prediction: Prediction
-    seen_in_train: bool
     predicted_top_id: str | None
 
     def to_dict(self) -> dict[str, Any]:
@@ -179,6 +178,5 @@ class ExampleResult:
             "raw_response": self.raw_response,
             "response_metadata": self.response_metadata,
             "prediction": self.prediction.to_dict(),
-            "seen_in_train": self.seen_in_train,
             "predicted_top_id": self.predicted_top_id,
         }

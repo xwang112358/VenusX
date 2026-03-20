@@ -137,7 +137,6 @@ class MetricTests(unittest.TestCase):
                 raw_response='{"top_ids":["IPR000126"]}',
                 response_metadata={},
                 prediction=Prediction(("IPR000126",), 1.0, False, True, ()),
-                seen_in_train=True,
                 predicted_top_id="IPR000126",
             ),
             ExampleResult(
@@ -146,7 +145,6 @@ class MetricTests(unittest.TestCase):
                 raw_response='{"top_ids":["IPR000126","IPR000138"]}',
                 response_metadata={},
                 prediction=Prediction(("IPR000126", "IPR000138"), 0.9, False, True, ()),
-                seen_in_train=False,
                 predicted_top_id="IPR000126",
             ),
             ExampleResult(
@@ -155,7 +153,6 @@ class MetricTests(unittest.TestCase):
                 raw_response="bad output",
                 response_metadata={},
                 prediction=Prediction((), None, False, False, (), "No valid JSON"),
-                seen_in_train=False,
                 predicted_top_id=None,
             ),
         ]

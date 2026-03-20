@@ -231,7 +231,6 @@ If one backend call fails, the runner records that example as an error and conti
 
 - `main_paper_table`
 - `supplemental_llm_table`
-- `details`
 
 `main_paper_table` contains:
 
@@ -250,18 +249,6 @@ If one backend call fails, the runner records that example as an error and conti
 - `abstain_rate`
 - `coverage`
 - `selective_accuracy`
-
-`details` contains:
-
-- `per_class_precision`
-- `per_class_recall`
-- `per_class_f1`
-
-It also computes slices for:
-
-- seen vs unseen labels
-- single vs multi-fragment examples
-- short / medium / long fragments
 
 Finally the run writes artifacts to:
 

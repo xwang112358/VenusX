@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 
-from evaluation_llm.fragment_dataset import fragment_length_bin
 from evaluation_llm.records import ExampleResult
 
 MISSING_PREDICTION_LABEL = "__NONE__"
@@ -29,14 +28,14 @@ def _round_metric(value: float) -> float:
 def _compute_macro_classification_metrics(
     gold_labels: list[str],
     predicted_labels: list[str],
-) -> tuple[dict[str, float], dict[str, float], dict[str, float], float, float, float]:
+) -> tuple[float, float, float]:
     if not gold_labels:
-        return {}, {}, {}, 0.0, 0.0, 0.0
+        return 0.0, 0.0, 0.0
 
     labels = sorted(set(gold_labels) | {label for label in predicted_labels if label != MISSING_PREDICTION_LABEL})
-    per_class_precision = {}
-    per_class_recall = {}
-    per_class_f1 = {}
+    precision_values: list[float] = []
+    recall_values: list[float] = []
+    f1_values: list[float] = []
     for label in labels:
         tp = sum(1 for gold, pred in zip(gold_labels, predicted_labels) if gold == label and pred == label)
         fp = sum(1 for gold, pred in zip(gold_labels, predicted_labels) if gold != label and pred == label)
@@ -46,21 +45,14 @@ def _compute_macro_classification_metrics(
         recall = tp / (tp + fn) if (tp + fn) else 0.0
         f1 = _f1(tp, fp, fn)
 
-        per_class_precision[label] = _round_metric(precision)
-        per_class_recall[label] = _round_metric(recall)
-        per_class_f1[label] = _round_metric(f1)
+        precision_values.append(precision)
+        recall_values.append(recall)
+        f1_values.append(f1)
 
-    macro_precision = _round_metric(sum(per_class_precision.values()) / len(per_class_precision))
-    macro_recall = _round_metric(sum(per_class_recall.values()) / len(per_class_recall))
-    macro_f1 = _round_metric(sum(per_class_f1.values()) / len(per_class_f1))
-    return (
-        per_class_precision,
-        per_class_recall,
-        per_class_f1,
-        macro_precision,
-        macro_recall,
-        macro_f1,
-    )
+    macro_precision = _round_metric(sum(precision_values) / len(precision_values))
+    macro_recall = _round_metric(sum(recall_values) / len(recall_values))
+    macro_f1 = _round_metric(sum(f1_values) / len(f1_values))
+    return macro_precision, macro_recall, macro_f1
 
 
 def _compute_multiclass_mcc(gold_labels: list[str], predicted_labels: list[str]) -> float:
@@ -96,25 +88,7 @@ class FragmentBenchmarkMetrics:
         self.results.append(result)
 
     def compute(self) -> dict:
-        summary = self._summarize(self.results)
-        slices = {
-            "seen_in_train": self._summarize([result for result in self.results if result.seen_in_train]),
-            "unseen_in_train": self._summarize([result for result in self.results if not result.seen_in_train]),
-            "multi_fragment": self._summarize([result for result in self.results if result.example.is_multi_fragment]),
-            "single_fragment": self._summarize([result for result in self.results if not result.example.is_multi_fragment]),
-        }
-
-        for length_bucket in ("short", "medium", "long"):
-            slices[f"fragment_length::{length_bucket}"] = self._summarize(
-                [
-                    result
-                    for result in self.results
-                    if fragment_length_bin(result.example.fragment_length) == length_bucket
-                ]
-            )
-
-        summary["slices"] = slices
-        return summary
+        return self._summarize(self.results)
 
     def _summarize(self, results: list[ExampleResult]) -> dict:
         count = len(results)
@@ -122,19 +96,13 @@ class FragmentBenchmarkMetrics:
             return {
                 "main_paper_table": {"count": 0},
                 "supplemental_llm_table": {"count": 0},
-                "details": {},
             }
 
         gold_labels = [result.example.interpro_id for result in results]
         predicted_labels = [result.predicted_top_id or MISSING_PREDICTION_LABEL for result in results]
-        (
-            per_class_precision,
-            per_class_recall,
-            per_class_f1,
-            macro_precision,
-            macro_recall,
-            macro_f1,
-        ) = _compute_macro_classification_metrics(gold_labels, predicted_labels)
+        macro_precision, macro_recall, macro_f1 = _compute_macro_classification_metrics(
+            gold_labels, predicted_labels
+        )
         mcc = _compute_multiclass_mcc(gold_labels, predicted_labels)
 
         top1_hits = 0
@@ -183,9 +151,4 @@ class FragmentBenchmarkMetrics:
         return {
             "main_paper_table": main_paper_table,
             "supplemental_llm_table": supplemental_llm_table,
-            "details": {
-                "per_class_precision": per_class_precision,
-                "per_class_recall": per_class_recall,
-                "per_class_f1": per_class_f1,
-            },
         }

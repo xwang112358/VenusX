@@ -97,18 +97,6 @@ Supplemental LLM table:
 - `coverage`
 - `selective_accuracy`
 
-Additional analysis:
-
-- `per_class_precision`
-- `per_class_recall`
-- `per_class_f1`
-
-Slice reports are also produced for:
-
-- seen-in-train vs unseen-in-train labels
-- single-fragment vs multi-fragment examples
-- short / medium / long fragment lengths
-
 Artifacts are written to:
 
 ```text
@@ -119,7 +107,7 @@ Each run saves:
 
 - resolved config
 - dataset/catalog alignment summary
-- metrics summary with `main_paper_table`, `supplemental_llm_table`, and slices
+- metrics summary with `main_paper_table` and `supplemental_llm_table`
 - per-example records with prompts, candidates, raw responses, and parsed outputs
 - error records for parse failures, invalid labels, or backend failures
 

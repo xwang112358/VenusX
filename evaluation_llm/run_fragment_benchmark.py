@@ -13,7 +13,6 @@ from tqdm import tqdm
 from evaluation_llm.fragment_dataset import (
     get_dataset_info,
     load_fragment_examples,
-    load_train_label_ids,
     summarize_catalog_alignment,
 )
 from evaluation_llm.label_catalog import load_label_catalog
@@ -117,7 +116,6 @@ def run_single_benchmark(
     label_cards = catalog.sorted_cards()
     examples = load_fragment_examples(dataset_info, split=settings.split, max_examples=settings.max_examples)
     alignment_summary = summarize_catalog_alignment(examples, catalog)
-    train_label_ids = load_train_label_ids(dataset_info)
 
     backend = create_model_backend(
         settings.model_provider,
@@ -174,7 +172,6 @@ def run_single_benchmark(
             raw_response=raw_response,
             response_metadata=response_metadata,
             prediction=prediction,
-            seen_in_train=example.interpro_id in train_label_ids,
             predicted_top_id=predicted_top_id,
         )
         results.append(result)

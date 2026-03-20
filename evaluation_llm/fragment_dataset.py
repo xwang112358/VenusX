@@ -158,15 +158,3 @@ def summarize_catalog_alignment(examples: list[FragmentExample], catalog: LabelC
         "catalog_index_match_count": matches_catalog_index,
         "catalog_index_mismatch_count": mismatches_catalog_index,
     }
-
-
-def load_train_label_ids(dataset_info: DatasetInfo) -> set[str]:
-    return {example.interpro_id for example in load_fragment_examples(dataset_info, split="train")}
-
-
-def fragment_length_bin(length: int) -> str:
-    if length <= 15:
-        return "short"
-    if length <= 50:
-        return "medium"
-    return "long"
