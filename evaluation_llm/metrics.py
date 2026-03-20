@@ -107,7 +107,6 @@ class FragmentBenchmarkMetrics:
 
         top1_hits = 0
         top3_hits = 0
-        top5_hits = 0
         parse_success = 0
         invalid_label_examples = 0
         abstain_examples = 0
@@ -127,8 +126,6 @@ class FragmentBenchmarkMetrics:
                 covered_examples += 1
             if result.example.interpro_id in predictions[:3]:
                 top3_hits += 1
-            if result.example.interpro_id in predictions[:5]:
-                top5_hits += 1
 
         main_paper_table = {
             "count": count,
@@ -141,7 +138,6 @@ class FragmentBenchmarkMetrics:
         supplemental_llm_table = {
             "count": count,
             "top3_acc": _safe_rate(top3_hits, count),
-            "top5_acc": _safe_rate(top5_hits, count),
             "parse_success_rate": _safe_rate(parse_success, count),
             "invalid_label_rate": _safe_rate(invalid_label_examples, count),
             "abstain_rate": _safe_rate(abstain_examples, count),

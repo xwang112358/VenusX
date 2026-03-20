@@ -81,7 +81,11 @@ class MockModelBackend:
 
         payload = {
             "top_ids": top_ids,
-            "confidence": 1.0 if top_ids else 0.0,
+            "reasoning_summary": (
+                "Oracle mock backend returns the gold label."
+                if self.mode == "oracle"
+                else "Mock backend ranks labels using simple deterministic heuristics."
+            ),
             "abstain": not top_ids,
         }
         return ModelResponse(raw_text=json.dumps(payload), metadata=metadata)

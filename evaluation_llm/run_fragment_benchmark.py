@@ -154,7 +154,7 @@ def run_single_benchmark(
         except Exception as exc:
             prediction = Prediction(
                 top_ids=tuple(),
-                confidence=None,
+                reasoning_summary=None,
                 abstain=False,
                 parse_success=False,
                 invalid_labels=tuple(),

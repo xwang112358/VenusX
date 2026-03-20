@@ -143,7 +143,7 @@ class ModelResponse:
 @dataclass(frozen=True)
 class Prediction:
     top_ids: tuple[str, ...]
-    confidence: float | None
+    reasoning_summary: str | None
     abstain: bool
     parse_success: bool
     invalid_labels: tuple[str, ...]
@@ -153,7 +153,7 @@ class Prediction:
     def to_dict(self) -> dict[str, Any]:
         return {
             "top_ids": list(self.top_ids),
-            "confidence": self.confidence,
+            "reasoning_summary": self.reasoning_summary,
             "abstain": self.abstain,
             "parse_success": self.parse_success,
             "invalid_labels": list(self.invalid_labels),

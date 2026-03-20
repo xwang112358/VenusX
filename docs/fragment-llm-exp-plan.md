@@ -8,7 +8,7 @@ It is designed for the current `evaluation_llm/` framework:
 - tracks: `VenusX_Res_Act_*` and `VenusX_Res_BindI_*`
 - experiments: `E0`, `E1`, `E2`, `E3`
 - models: `mock`, `replay`, `openrouter`
-- output: up to 5 ranked candidate labels, with `top_ids[0]` treated as the final prediction
+- output: up to 3 ranked candidate labels, with `top_ids[0]` treated as the final prediction and a short `reasoning_summary`
 
 ## 1. Goal of the First Round
 
@@ -76,7 +76,6 @@ These should be used in the main result tables in the paper.
 These diagnose LLM behavior rather than pure classification quality:
 
 - `top3_acc`
-- `top5_acc`
 - `parse_success_rate`
 - `invalid_label_rate`
 - `abstain_rate`
@@ -123,29 +122,22 @@ Bottom line:
 
 Start with 4 models:
 
-- `google/gemini-2.5-flash-lite`
-- `openai/gpt-4.1-mini`
 - `deepseek/deepseek-chat-v3.1`
-- `meta-llama/llama-3.3-70b-instruct`
+- `openai/gpt-5-mini`
+- `google/gemini-2.5-flash`
+- `anthropic/claude-haiku-4.5`
 
 Why this group:
 
-- 2 cheap closed-source anchors
-- 2 strong open-family baselines
+- 3 strong closed-model workhorses
+- 1 strong open-family baseline
 - reasonable cost for a first comparison
 
 ### Full starter set
 
 If the minimal first table looks good, add:
 
-- `qwen/qwen-2.5-72b-instruct`
-
-### Extended set
-
-Use later, not in the first paid run:
-
-- `anthropic/claude-3.5-haiku`
-- `mistralai/mistral-small-3.2-24b-instruct`
+- `openai/gpt-5`
 
 ## 6. Experiment Order
 
@@ -192,10 +184,10 @@ Use one very cheap model first:
 ```bash
 python -m evaluation_llm \
   --dataset_id VenusX_Res_BindI_MF50 \
-  --split valid \
+  --split test \
   --experiment E1 \
   --model_provider openrouter \
-  --model_name google/gemini-2.5-flash-lite \
+  --model_name deepseek/deepseek-chat-v3.1 \
   --max_examples 10
 ```
 
@@ -223,8 +215,8 @@ Goal:
 Recommended setup:
 
 - dataset: `MF50`
-- split: `valid`
-- models: `google/gemini-2.5-flash-lite` and `openai/gpt-4.1-mini`
+- split: `test`
+- models: `deepseek/deepseek-chat-v3.1` and `openai/gpt-5-mini`
 - cap: `50` to `100` examples
 
 Suggested commands:
@@ -232,10 +224,10 @@ Suggested commands:
 ```bash
 python -m evaluation_llm \
   --dataset_id VenusX_Res_Act_MF50 \
-  --split valid \
+  --split test \
   --experiment E2 \
   --model_provider openrouter \
-  --model_name openai/gpt-4.1-mini \
+  --model_name deepseek/deepseek-chat-v3.1 \
   --max_examples 100
 ```
 
@@ -263,7 +255,7 @@ Recommended setup:
 
 - dataset: `VenusX_Res_Act_MF50` and `VenusX_Res_BindI_MF50`
 - split: `valid`
-- models: `google/gemini-2.5-flash-lite` and `openai/gpt-4.1-mini`
+- models: `deepseek/deepseek-chat-v3.1` and `openai/gpt-5-mini`
 - no `max_examples`
 
 Simplest route:
@@ -273,7 +265,7 @@ python -m evaluation_llm \
   --dataset_id VenusX_Res_Act_MF50 \
   --experiment E2 \
   --model_provider openrouter \
-  --model_name openai/gpt-4.1-mini \
+  --model_name deepseek/deepseek-chat-v3.1 \
   --suite
 ```
 
@@ -294,10 +286,10 @@ Recommended setup:
   - `VenusX_Res_Act_MF50`
   - `VenusX_Res_BindI_MF50`
 - models:
-  - `google/gemini-2.5-flash-lite`
-  - `openai/gpt-4.1-mini`
   - `deepseek/deepseek-chat-v3.1`
-  - `meta-llama/llama-3.3-70b-instruct`
+  - `openai/gpt-5-mini`
+  - `google/gemini-2.5-flash`
+  - `anthropic/claude-haiku-4.5`
 - prompt setting:
   - use the best setting chosen in Stage 3
 
@@ -326,7 +318,7 @@ python -m evaluation_llm \
   --dataset_id VenusX_Res_Act_MF70 \
   --experiment E2 \
   --model_provider openrouter \
-  --model_name openai/gpt-4.1-mini
+  --model_name deepseek/deepseek-chat-v3.1
 ```
 
 Use the frozen experiment setting from Stage 3, even if it is `E1` or `E3` instead of `E2`.
@@ -357,7 +349,6 @@ Reason:
 
 Only do these after the baseline round is complete:
 
-- add the `extended` model set
 - compare `E2` vs `E3` on both tracks at full scale
 - add explicit cost and latency summaries
 - add agent-style evaluation
@@ -370,12 +361,12 @@ If you want one concrete path to follow, use this:
 1. `E0` smoke test locally.
 2. Tiny `10`-example OpenRouter runs for `E1`, `E2`, `E3` on `VenusX_Res_BindI_MF50`.
 3. `50`- to `100`-example validation ablation for:
-   - `google/gemini-2.5-flash-lite`
-   - `openai/gpt-4.1-mini`
+   - `deepseek/deepseek-chat-v3.1`
+   - `openai/gpt-5-mini`
 4. Choose one prompt setting per track.
 5. Run full `MF50` tests for the 4-model minimal table.
 6. Freeze the setting and transfer to `MF70` and `MF90`.
-7. Add `qwen/qwen-2.5-72b-instruct` if budget allows.
+7. Add `openai/gpt-5` if budget allows.
 
 This sequence is conservative, cheap enough for a first round, and strong enough to produce an initial paper-quality result table.
 

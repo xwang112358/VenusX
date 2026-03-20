@@ -88,36 +88,45 @@ class PromptAndParsingTests(unittest.TestCase):
         prompt_a = build_fragment_prompt(example, catalog, settings)
         prompt_b = build_fragment_prompt(example, catalog, settings)
         self.assertEqual(prompt_a, prompt_b)
-        self.assertIn("at most 5 candidates", prompt_a)
-        self.assertIn("return between 1 and 5 candidate accessions", prompt_a)
+        self.assertIn("at most 3 candidates", prompt_a)
+        self.assertIn("return between 1 and 3 candidate accessions", prompt_a)
+        self.assertIn("reasoning_summary", prompt_a)
 
         exact = parse_model_response(
-            f'{{"top_ids":["{example.interpro_id}"],"confidence":0.9,"abstain":false}}',
+            (
+                '{"top_ids":["'
+                + example.interpro_id
+                + '"],"reasoning_summary":"Strongest match.","abstain":false}'
+            ),
             catalog,
         )
         self.assertEqual(exact.top_ids, (example.interpro_id,))
         self.assertTrue(exact.parse_success)
+        self.assertEqual(exact.reasoning_summary, "Strongest match.")
 
         name_only = parse_model_response(
-            '{"top_ids":["Hydroxymethylglutaryl-CoA lyase, active site"],"confidence":0.6,"abstain":false}',
+            '{"top_ids":["Hydroxymethylglutaryl-CoA lyase, active site"],"reasoning_summary":"Name match.","abstain":false}',
             catalog,
         )
         self.assertEqual(name_only.top_ids, ("IPR000138",))
 
-        sample_ids = [card.accession for card in catalog.sorted_cards()[:6]]
-        max_five = parse_model_response(
+        sample_ids = [card.accession for card in catalog.sorted_cards()[:4]]
+        max_three = parse_model_response(
             '{"top_ids":'
             + str(sample_ids).replace("'", '"')
-            + ',"confidence":0.7,"abstain":false}',
+            + ',"reasoning_summary":"Top-ranked candidates.","abstain":false}',
             catalog,
         )
-        self.assertEqual(len(max_five.top_ids), 5)
-        self.assertEqual(max_five.top_ids, tuple(sample_ids[:5]))
+        self.assertEqual(len(max_three.top_ids), 3)
+        self.assertEqual(max_three.top_ids, tuple(sample_ids[:3]))
 
         invalid = parse_model_response("not json and no accession", catalog)
         self.assertFalse(invalid.parse_success)
 
-        abstain = parse_model_response('{"top_ids":[],"confidence":0.2,"abstain":true}', catalog)
+        abstain = parse_model_response(
+            '{"top_ids":[],"reasoning_summary":"Not enough evidence.","abstain":true}',
+            catalog,
+        )
         self.assertTrue(abstain.parse_success)
         self.assertTrue(abstain.abstain)
         self.assertEqual(abstain.top_ids, ())
@@ -136,7 +145,7 @@ class MetricTests(unittest.TestCase):
                 prompt="prompt",
                 raw_response='{"top_ids":["IPR000126"]}',
                 response_metadata={},
-                prediction=Prediction(("IPR000126",), 1.0, False, True, ()),
+                prediction=Prediction(("IPR000126",), "Correct label.", False, True, ()),
                 predicted_top_id="IPR000126",
             ),
             ExampleResult(
@@ -144,7 +153,7 @@ class MetricTests(unittest.TestCase):
                 prompt="prompt",
                 raw_response='{"top_ids":["IPR000126","IPR000138"]}',
                 response_metadata={},
-                prediction=Prediction(("IPR000126", "IPR000138"), 0.9, False, True, ()),
+                prediction=Prediction(("IPR000126", "IPR000138"), "Close alternative.", False, True, ()),
                 predicted_top_id="IPR000126",
             ),
             ExampleResult(
@@ -186,23 +195,19 @@ class RunnerPresetTests(unittest.TestCase):
         )
 
     def test_openrouter_model_sets_include_expected_starter_models(self) -> None:
-        self.assertEqual(list_model_sets(), ["extended", "starter"])
+        self.assertEqual(list_model_sets(), ["starter"])
 
         starter_ids = [spec.model_id for spec in get_model_set("starter")]
         self.assertEqual(
             starter_ids,
             [
-                "google/gemini-2.5-flash-lite",
-                "openai/gpt-4.1-mini",
                 "deepseek/deepseek-chat-v3.1",
-                "meta-llama/llama-3.3-70b-instruct",
-                "qwen/qwen-2.5-72b-instruct",
+                "openai/gpt-5-mini",
+                "google/gemini-2.5-flash",
+                "anthropic/claude-haiku-4.5",
+                "openai/gpt-5",
             ],
         )
-
-        extended_ids = [spec.model_id for spec in get_model_set("extended")]
-        self.assertIn("anthropic/claude-3.5-haiku", extended_ids)
-        self.assertIn("mistralai/mistral-small-3.2-24b-instruct", extended_ids)
 
 
 class OpenRouterBackendTests(unittest.TestCase):
@@ -221,7 +226,11 @@ class OpenRouterBackendTests(unittest.TestCase):
             "choices": [
                 {
                     "message": {
-                        "content": '{"top_ids":["IPR000138"],"confidence":0.8,"abstain":false}'
+                        "content": (
+                            '{"top_ids":["IPR000138"],'
+                            '"reasoning_summary":"Short rationale.",'
+                            '"abstain":false}'
+                        )
                     }
                 }
             ],

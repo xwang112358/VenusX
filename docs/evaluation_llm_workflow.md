@@ -54,7 +54,7 @@ python -m evaluation_llm \
   --dataset_id VenusX_Res_Act_MF50 \
   --experiment E2 \
   --model_provider openrouter \
-  --model_name openai/gpt-4.1-mini
+  --model_name openai/gpt-5-mini
 ```
 
 the workflow is:
@@ -181,7 +181,7 @@ For every example, `build_fragment_prompt(...)` in `evaluation_llm/prompt_and_pa
 - the fragment parts and residue ranges
 - optional full-sequence context
 - the full label catalog rendered as candidate labels
-- the required JSON output schema with up to 5 ranked `top_ids`
+- the required JSON output schema with up to 3 ranked `top_ids`
 
 Prompt differences across experiments are small and controlled.
 
@@ -206,12 +206,14 @@ For OpenRouter runs:
 `parse_model_response(...)` tries to normalize the model output into:
 
 - `top_ids`
-- `confidence`
+- `reasoning_summary`
 - `abstain`
 - `parse_success`
 - `invalid_labels`
 
-`top_ids` is a ranked list with at most 5 candidate accessions.
+`top_ids` is a ranked list with at most 3 candidate accessions.
+
+`reasoning_summary` is a short rationale used for qualitative inspection, not a full chain-of-thought trace.
 
 The parser is intentionally forgiving:
 
@@ -243,7 +245,6 @@ If one backend call fails, the runner records that example as an error and conti
 `supplemental_llm_table` contains:
 
 - `top3_acc`
-- `top5_acc`
 - `parse_success_rate`
 - `invalid_label_rate`
 - `abstain_rate`
@@ -333,7 +334,6 @@ It:
 Current model sets:
 
 - `starter`
-- `extended`
 
 This helper is useful when you want a paper-style baseline table from a fixed list of models.
 
@@ -460,7 +460,7 @@ python -m evaluation_llm \
   --dataset_id VenusX_Res_Act_MF50 \
   --experiment E2 \
   --model_provider openrouter \
-  --model_name openai/gpt-4.1-mini
+  --model_name openai/gpt-5-mini
 ```
 
 Run the validation-selection suite:
@@ -470,7 +470,7 @@ python -m evaluation_llm \
   --dataset_id VenusX_Res_Act_MF50 \
   --experiment E2 \
   --model_provider openrouter \
-  --model_name openai/gpt-4.1-mini \
+  --model_name openai/gpt-5-mini \
   --suite
 ```
 

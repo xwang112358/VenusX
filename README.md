@@ -66,11 +66,12 @@ Prompt/output contract:
 - Canonical format:
 
 ```json
-{"top_ids":["IPR000138"],"confidence":0.87,"abstain":false}
+{"top_ids":["IPR000138"],"reasoning_summary":"Best label based on the fragment signal.","abstain":false}
 ```
 
-- `top_ids` may contain up to 5 ranked candidate accessions.
+- `top_ids` may contain up to 3 ranked candidate accessions.
 - `top_ids[0]` is treated as the final prediction.
+- `reasoning_summary` is a short rationale, not a full chain-of-thought.
 - Predictions are normalized against the label catalog by InterPro accession.
 
 Current evaluation mode:
@@ -90,7 +91,6 @@ Main paper table:
 Supplemental LLM table:
 
 - `top3_acc`
-- `top5_acc`
 - `parse_success_rate`
 - `invalid_label_rate`
 - `abstain_rate`
@@ -155,7 +155,7 @@ python -m evaluation_llm \
 Replay JSONL format:
 
 ```json
-{"uid":"P21671","raw_text":"{\"top_ids\":[\"IPR018247\"],\"confidence\":0.91,\"abstain\":false}"}
+{"uid":"P21671","raw_text":"{\"top_ids\":[\"IPR018247\"],\"reasoning_summary\":\"Best motif match.\",\"abstain\":false}"}
 ```
 
 Run the benchmark tests:
@@ -203,7 +203,7 @@ python -m evaluation_llm \
   --dataset_id VenusX_Res_Act_MF50 \
   --experiment E2 \
   --model_provider openrouter \
-  --model_name openai/gpt-4.1-mini
+  --model_name openai/gpt-5-mini
 ```
 
 The benchmark sends one prompt per fragment example to OpenRouter's chat completions API and then reuses the same parser, metrics, and artifact writing flow as the mock and replay backends.
@@ -212,22 +212,17 @@ The benchmark sends one prompt per fragment example to OpenRouter's chat complet
 
 For a first pass, use a small but representative cross-family pack instead of jumping straight to expensive flagship models. The current `starter` set in `evaluation_llm/model_sets.py` is:
 
-- `google/gemini-2.5-flash-lite`
-- `openai/gpt-4.1-mini`
 - `deepseek/deepseek-chat-v3.1`
-- `meta-llama/llama-3.3-70b-instruct`
-- `qwen/qwen-2.5-72b-instruct`
+- `openai/gpt-5-mini`
+- `google/gemini-2.5-flash`
+- `anthropic/claude-haiku-4.5`
+- `openai/gpt-5`
 
 Why this set:
 
-- it gives you 2 inexpensive closed-model anchors and 3 strong open-family baselines
-- these model families show up often in current benchmark comparisons
-- they are much cheaper than frontier flagship models while still being strong enough to make the benchmark informative
-
-There is also an `extended` set if you want to add:
-
-- `anthropic/claude-3.5-haiku`
-- `mistralai/mistral-small-3.2-24b-instruct`
+- it includes one strong open-family baseline, three strong closed-model workhorses, and one frontier anchor
+- it gives you a practical spread from relatively affordable to best-case capability
+- it matches the current baseline set used by this repo
 
 Run the whole starter pack with:
 
@@ -240,10 +235,10 @@ python -m evaluation_llm.run_openrouter_model_set \
 
 If you only want a very small initial paper-style table, I would start with:
 
-- `openai/gpt-4.1-mini`
-- `google/gemini-2.5-flash-lite`
+- `openai/gpt-5-mini`
+- `google/gemini-2.5-flash`
 - `deepseek/deepseek-chat-v3.1`
-- `meta-llama/llama-3.3-70b-instruct`
+- `anthropic/claude-haiku-4.5`
 
 ## Important Files
 
@@ -253,7 +248,7 @@ If you only want a very small initial paper-style table, I would start with:
 - `evaluation_llm/label_catalog.py`: InterPro description catalog loading and short-description building
 - `evaluation_llm/prompt_and_parse.py`: prompt assembly and JSON parsing
 - `evaluation_llm/model_backends.py`: mock, replay, and OpenRouter-backed model calls
-- `evaluation_llm/model_sets.py`: curated starter and extended OpenRouter model packs
+- `evaluation_llm/model_sets.py`: curated starter OpenRouter model pack
 - `evaluation_llm/metrics.py`: metrics and slice reporting
 - `evaluation_llm/records.py`: core benchmark dataclasses
 - `tests/test_evaluation_llm.py`: unit and smoke coverage

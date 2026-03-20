@@ -9,7 +9,7 @@ from evaluation_llm.records import ExperimentSettings, FragmentExample, LabelCar
 
 
 ACCESSION_RE = re.compile(r"IPR\d+")
-MAX_TOP_IDS = 5
+MAX_TOP_IDS = 3
 
 
 def _render_label_card(card: LabelCard, style: str) -> str:
@@ -59,8 +59,9 @@ def build_fragment_prompt(
     sections = [
         "You are doing fragment-level protein function label selection.",
         "Choose the best InterPro accession for the fragment from the candidate labels.",
-        'Return JSON only with the schema {"top_ids":["IPR..."],"confidence":0.0,"abstain":false}.',
+        'Return JSON only with the schema {"top_ids":["IPR..."],"reasoning_summary":"...", "abstain":false}.',
         f"Use canonical InterPro accessions in top_ids, ordered from best to worst, with at most {MAX_TOP_IDS} candidates.",
+        "Keep reasoning_summary short: 1 to 2 sentences explaining why the top label is ranked above the alternatives.",
         f"Experiment: {settings.experiment_name}",
         f"Candidate count: {len(catalog.cards)}",
     ]
@@ -89,6 +90,7 @@ def build_fragment_prompt(
     sections.append(
         f"If you are uncertain, set abstain=true and leave top_ids empty. "
         f"If you do answer, return between 1 and {MAX_TOP_IDS} candidate accessions. "
+        "If you provide reasoning_summary, keep it concise rather than step-by-step. "
         "Do not invent accessions outside the candidate list."
     )
     return "\n\n".join(sections)
@@ -155,11 +157,21 @@ def _coerce_bool(raw_value: Any) -> bool:
     return False
 
 
+def _normalize_reasoning_summary(payload: dict[str, Any]) -> str | None:
+    for key in ("reasoning_summary", "rationale", "reasoning", "reason", "explanation"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            normalized = " ".join(value.split()).strip()
+            if normalized:
+                return normalized
+    return None
+
+
 def parse_model_response(raw_text: str, catalog: LabelCatalog) -> Prediction:
     payload = _extract_json_object(raw_text)
     invalid_labels: list[str] = []
     normalized_ids: list[str] = []
-    confidence: float | None = None
+    reasoning_summary: str | None = None
     abstain = False
 
     if isinstance(payload, dict):
@@ -179,9 +191,7 @@ def parse_model_response(raw_text: str, catalog: LabelCatalog) -> Prediction:
             if len(normalized_ids) >= MAX_TOP_IDS:
                 break
 
-        raw_confidence = payload.get("confidence")
-        if isinstance(raw_confidence, (int, float)):
-            confidence = max(0.0, min(1.0, float(raw_confidence)))
+        reasoning_summary = _normalize_reasoning_summary(payload)
         abstain = _coerce_bool(payload.get("abstain"))
         parse_success = True
         parse_error = None
@@ -205,7 +215,7 @@ def parse_model_response(raw_text: str, catalog: LabelCatalog) -> Prediction:
     if not parse_success and not abstain:
         return Prediction(
             top_ids=tuple(),
-            confidence=confidence,
+            reasoning_summary=reasoning_summary,
             abstain=False,
             parse_success=False,
             invalid_labels=tuple(invalid_labels),
@@ -215,7 +225,7 @@ def parse_model_response(raw_text: str, catalog: LabelCatalog) -> Prediction:
 
     return Prediction(
         top_ids=tuple(normalized_ids),
-        confidence=confidence,
+        reasoning_summary=reasoning_summary,
         abstain=abstain,
         parse_success=True,
         invalid_labels=tuple(invalid_labels),
