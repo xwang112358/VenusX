@@ -346,6 +346,22 @@ class LoadExamplesTests(unittest.TestCase):
             os.unlink(tmp)
 
 
+class EvaluationAgentCliTests(unittest.TestCase):
+    @patch("evaluation_agent.__main__.load_default_env_file")
+    def test_parse_args_model_default_is_gpt_4o(self, _mock_load_env):
+        from evaluation_agent.__main__ import _parse_args
+
+        args = _parse_args(
+            [
+                "--csv",
+                "data/interpro_2503/VenusX_Res_Act_MF50/test.csv",
+                "--email",
+                "test@example.com",
+            ]
+        )
+        self.assertEqual(args.model, "gpt-4o")
+
+
 class ResidueMetricsTests(unittest.TestCase):
     def test_perfect_match(self):
         residues = frozenset(range(1, 11))

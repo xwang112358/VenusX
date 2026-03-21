@@ -5,7 +5,7 @@ Usage
 python -m evaluation_agent \\
     --csv  data/interpro_2503/VenusX_Res_Act_MF50/test.csv \\
     --email  you@example.com \\
-    [--model  claude-opus-4-6] \\
+    [--model  gpt-4o] \\
     [--max_examples  50] \\
     [--iou_threshold  0.5] \\
     [--out  results.jsonl]
@@ -48,9 +48,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default="claude-opus-4-6",
+        default="gpt-4o",
         metavar="ID",
-        help="Claude model ID (default: claude-opus-4-6).",
+        help="Model ID passed to ProteinAgent (default: gpt-4o).",
     )
     parser.add_argument(
         "--max_examples",
