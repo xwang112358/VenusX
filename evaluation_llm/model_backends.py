@@ -237,11 +237,13 @@ class InterProAgentBackend:
 
     Environment variables
     ---------------------
-    ANTHROPIC_API_KEY     — passed to ProteinAgent / Claude
+    AZURE_OPENAI_ENDPOINT — Azure OpenAI resource endpoint (use_azure=True, default)
+    AZURE_OPENAI_API_KEY  — Azure OpenAI API key          (use_azure=True, default)
+    OPENAI_API_KEY        — plain OpenAI API key          (use_azure=False)
     INTERPROSCAN_EMAIL    — required by EBI terms of service
     """
 
-    def __init__(self, model_name: str = "claude-opus-4-6") -> None:
+    def __init__(self, model_name: str = "gpt-4o") -> None:
         _load_default_env_file()
         from protein_agent.agent import ProteinAgent
 
