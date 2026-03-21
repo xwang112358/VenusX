@@ -6,40 +6,9 @@ from pathlib import Path
 
 import requests
 
+from env_utils import load_default_env_file
 from evaluation_llm.label_catalog import LabelCatalog
 from evaluation_llm.records import FragmentExample, LabelCard, ModelResponse
-
-
-def _parse_env_value(raw_value: str) -> str:
-    value = raw_value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1]
-    return value
-
-
-def _load_env_file(env_path: Path) -> None:
-    if not env_path.exists():
-        return
-
-    for raw_line in env_path.read_text().splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key or key in os.environ:
-            continue
-        os.environ[key] = _parse_env_value(value)
-
-
-def _load_default_env_file() -> None:
-    env_override = os.environ.get("OPENROUTER_ENV_FILE")
-    if env_override:
-        _load_env_file(Path(env_override))
-        return
-
-    repo_env = Path(__file__).resolve().parents[1] / ".env"
-    _load_env_file(repo_env)
 
 
 def _label_text_score(fragment_text: str, label_text: str) -> tuple[int, int]:
@@ -140,7 +109,7 @@ class OpenRouterModelBackend:
         max_tokens: int = 256,
         timeout_seconds: float = 120.0,
     ) -> None:
-        _load_default_env_file()
+        load_default_env_file(env_override_var="OPENROUTER_ENV_FILE")
         self.model_name = model_name
         self.temperature = temperature
         self.api_key = api_key or os.environ.get("OPENROUTER_API_KEY")

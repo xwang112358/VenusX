@@ -7,9 +7,26 @@ from __future__ import annotations
 import csv
 import io
 import json
+import sys
 import textwrap
+import types
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+if "anthropic" not in sys.modules:
+    anthropic_stub = types.ModuleType("anthropic")
+
+    class _AnthropicStub:
+        def __init__(self, *args, **kwargs) -> None:
+            raise AssertionError("anthropic.Anthropic should be mocked in tests")
+
+    anthropic_stub.Anthropic = _AnthropicStub
+    sys.modules["anthropic"] = anthropic_stub
 
 # ---------------------------------------------------------------------------
 # protein_agent tests
