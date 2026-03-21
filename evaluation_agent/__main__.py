@@ -19,12 +19,14 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from protein_agent.agent import ProteinAgent
+from env_utils import load_default_env_file
 from evaluation_agent.metrics import aggregate_results
 from evaluation_agent.runner import run_evaluation
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    load_default_env_file()
+
     parser = argparse.ArgumentParser(
         prog="python -m evaluation_agent",
         description="Evaluate the ProteinAgent on a VenusX CSV dataset.",
@@ -82,11 +84,19 @@ def main(argv: list[str] | None = None) -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print(
+            "ERROR: ANTHROPIC_API_KEY is required (or set it in .env).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     csv_path = Path(args.csv)
     if not csv_path.exists():
         print(f"ERROR: CSV file not found: {csv_path}", file=sys.stderr)
         sys.exit(1)
+
+    from protein_agent.agent import ProteinAgent
 
     agent = ProteinAgent(
         email=args.email,

@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import traceback
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from protein_agent.agent import ProteinAgent
 from evaluation_agent.dataset import load_examples
 from evaluation_agent.metrics import fragment_metrics, residue_metrics
 from evaluation_agent.records import EvalResult, EvaluationExample
+
+if TYPE_CHECKING:
+    from protein_agent.agent import ProteinAgent
 
 
 def run_evaluation(
