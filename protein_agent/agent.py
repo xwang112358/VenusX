@@ -1,4 +1,4 @@
-"""ProteinAgent — Claude tool-use loop for InterPro site annotation.
+"""ProteinAgent — OpenAI tool-use loop for InterPro site annotation.
 
 The agent receives a protein sequence, decides to call the `search_interpro`
 tool (backed by EBI InterProScan 5), processes the returned annotations, and
@@ -7,16 +7,17 @@ returns a structured AgentResult.
 Architecture:
     User → ProteinAgent.run(sequence)
                 │
-                └── Claude (tool-use loop)
+                └── LLM (tool-use loop via OpenAI chat completions)
                         ├── calls search_interpro(sequence)  ← InterProScanTool
-                        └── returns when stop_reason == "end_turn"
+                        └── returns when finish_reason == "stop"
+
+Supports both Azure OpenAI (default) and plain OpenAI endpoints — the only
+difference is which client class is instantiated in __init__.
 """
 from __future__ import annotations
 
 import json
 import os
-
-import anthropic
 
 from protein_agent.records import AgentResult, SiteAnnotation
 from protein_agent.tools.interpro_scan import InterProScanTool
@@ -27,34 +28,37 @@ from protein_agent.tools.interpro_scan import InterProScanTool
 _SITE_TYPES = {"ACTIVE_SITE", "BINDING_SITE", "CONSERVED_SITE", "PTM"}
 
 # ---------------------------------------------------------------------------
-# Tool schema registered with Claude
+# Tool schema — OpenAI function-calling format
 # ---------------------------------------------------------------------------
 _TOOL_SCHEMA: dict = {
-    "name": "search_interpro",
-    "description": (
-        "Submit a protein sequence to EBI InterProScan and return all matching "
-        "InterPro annotations, including active sites, binding sites, conserved "
-        "sites, domains, and post-translational modifications.  Each annotation "
-        "includes the InterPro accession, entry name, functional type, and the "
-        "residue positions (1-indexed, inclusive) where it was matched."
-    ),
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "sequence": {
-                "type": "string",
-                "description": (
-                    "Amino acid sequence in single-letter code, no spaces or gaps."
-                ),
-            }
+    "type": "function",
+    "function": {
+        "name": "search_interpro",
+        "description": (
+            "Submit a protein sequence to EBI InterProScan and return all matching "
+            "InterPro annotations, including active sites, binding sites, conserved "
+            "sites, domains, and post-translational modifications.  Each annotation "
+            "includes the InterPro accession, entry name, functional type, and the "
+            "residue positions (1-indexed, inclusive) where it was matched."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "sequence": {
+                    "type": "string",
+                    "description": (
+                        "Amino acid sequence in single-letter code, no spaces or gaps."
+                    ),
+                }
+            },
+            "required": ["sequence"],
+            "additionalProperties": False,
         },
-        "required": ["sequence"],
-        "additionalProperties": False,
     },
 }
 
 # ---------------------------------------------------------------------------
-# System prompt
+# Prompt helpers
 # ---------------------------------------------------------------------------
 _SYSTEM_PROMPT = (
     "You are a protein function analyst. "
@@ -89,40 +93,64 @@ def _annotations_to_json(annotations: list[SiteAnnotation]) -> str:
 
 
 class ProteinAgent:
-    """Claude-backed agent that annotates a protein sequence via InterProScan.
+    """OpenAI-backed agent that annotates a protein sequence via InterProScan.
+
+    Supports both Azure OpenAI (``use_azure=True``, the default) and plain
+    OpenAI (``use_azure=False``).  The only difference is the client
+    constructor; all downstream logic is identical.
 
     Parameters
     ----------
     email:
         Valid e-mail address required by EBI InterProScan.
-    api_key:
-        Anthropic API key.  Falls back to the ``ANTHROPIC_API_KEY`` environment
-        variable if *None*.
     model:
-        Claude model ID (default ``claude-opus-4-6``).
+        Model / deployment name.  For Azure this is the deployment name
+        (e.g. ``"gpt-4o"``); for plain OpenAI it is the model ID.
     max_tokens:
-        Maximum tokens for each Claude response in the loop.
+        Maximum tokens for each LLM response in the loop.
+    use_azure:
+        If *True* (default), construct an ``AzureOpenAI`` client using
+        ``AZURE_OPENAI_ENDPOINT`` and ``AZURE_OPENAI_API_KEY`` from the
+        environment.  If *False*, construct an ``OpenAI`` client using
+        ``OPENAI_API_KEY``.
     poll_interval:
         Seconds between InterProScan status polls.
     max_wait:
         Maximum seconds to wait for an InterProScan job to finish.
     timeout:
         Per-request HTTP timeout for InterProScan calls.
+    _client:
+        Optional pre-constructed OpenAI client — used in unit tests to
+        inject a mock without patching module imports.
     """
 
     def __init__(
         self,
         email: str,
-        api_key: str | None = None,
-        model: str = "claude-opus-4-6",
+        model: str = "gpt-4o",
         max_tokens: int = 1024,
+        use_azure: bool = True,
         poll_interval: int = 15,
         max_wait: int = 300,
         timeout: int = 30,
+        _client=None,
     ) -> None:
         self.model = model
         self.max_tokens = max_tokens
-        self.client = anthropic.Anthropic(api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"))
+
+        if _client is not None:
+            self.client = _client
+        elif use_azure:
+            from openai import AzureOpenAI
+            self.client = AzureOpenAI(
+                azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+                api_key=os.environ["AZURE_OPENAI_API_KEY"],
+                api_version="2024-02-01",
+            )
+        else:
+            from openai import OpenAI
+            self.client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
         self.tool = InterProScanTool(
             email=email,
             poll_interval=poll_interval,
@@ -134,7 +162,8 @@ class ProteinAgent:
         """Run the tool-use loop and return site annotations for *sequence*."""
         sequence = sequence.strip()
         messages: list[dict] = [
-            {"role": "user", "content": _build_user_prompt(sequence)}
+            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "user", "content": _build_user_prompt(sequence)},
         ]
 
         tool_call_count = 0
@@ -142,47 +171,40 @@ class ProteinAgent:
         final_usage: dict = {}
 
         while True:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                system=_SYSTEM_PROMPT,
                 tools=[_TOOL_SCHEMA],
                 messages=messages,
-                thinking={"type": "adaptive"},
             )
 
-            # Append the full assistant turn (preserves thinking / tool_use blocks)
-            messages.append({"role": "assistant", "content": response.content})
+            choice = response.choices[0]
+            msg = choice.message
 
-            if response.stop_reason != "tool_use":
-                # Claude is done (end_turn or other terminal state)
+            # Append the assistant turn (preserves tool_calls metadata)
+            messages.append(msg)
+
+            if choice.finish_reason != "tool_calls":
+                # LLM is done (stop, length, or other terminal state)
                 if response.usage:
-                    final_usage = {
-                        "input_tokens": response.usage.input_tokens,
-                        "output_tokens": response.usage.output_tokens,
-                    }
+                    final_usage = response.usage.model_dump()
                 break
 
-            # Execute every tool call Claude requested in this turn
-            tool_results = []
-            for block in response.content:
-                if block.type != "tool_use":
-                    continue
-
+            # Execute every tool call the LLM requested in this turn
+            for tc in msg.tool_calls or []:
                 tool_call_count += 1
-                seq_input: str = block.input.get("sequence", sequence)
+                args = json.loads(tc.function.arguments)
+                seq_input: str = args.get("sequence", sequence)
                 annotations = self.tool.search(seq_input)
                 all_annotations.extend(annotations)
 
-                tool_results.append(
+                messages.append(
                     {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
+                        "role": "tool",
+                        "tool_call_id": tc.id,
                         "content": _annotations_to_json(annotations),
                     }
                 )
-
-            messages.append({"role": "user", "content": tool_results})
 
         site_annotations = [a for a in all_annotations if a.site_type in _SITE_TYPES]
 

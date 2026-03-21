@@ -1,6 +1,6 @@
 """Unit tests for protein_agent/ and evaluation_agent/.
 
-All HTTP calls and the Anthropic API are mocked — no network access required.
+All HTTP calls and the OpenAI client are mocked — no network access required.
 """
 from __future__ import annotations
 
@@ -176,38 +176,50 @@ class InterProScanToolTests(unittest.TestCase):
             tool.search("MKVLAAAA")
 
 
-# ── ProteinAgent tool-use loop (Anthropic client mocked) ──────────────────
+# ── ProteinAgent tool-use loop (OpenAI client injected via _client) ────────
 
 
 class ProteinAgentTests(unittest.TestCase):
-    def _make_tool_use_response(self, tool_use_id: str, sequence: str):
-        """Build a mock Anthropic response that requests a tool call."""
-        block = MagicMock()
-        block.type = "tool_use"
-        block.id = tool_use_id
-        block.input = {"sequence": sequence}
+    def _make_tool_call_response(self, tool_call_id: str, sequence: str):
+        """Build a mock OpenAI response that requests a tool call."""
+        tc = MagicMock()
+        tc.id = tool_call_id
+        tc.function.name = "search_interpro"
+        tc.function.arguments = json.dumps({"sequence": sequence})
+
+        msg = MagicMock()
+        msg.tool_calls = [tc]
+
+        choice = MagicMock()
+        choice.finish_reason = "tool_calls"
+        choice.message = msg
 
         response = MagicMock()
-        response.stop_reason = "tool_use"
-        response.content = [block]
-        response.usage = MagicMock(input_tokens=100, output_tokens=50)
+        response.choices = [choice]
+        response.usage.model_dump.return_value = {
+            "prompt_tokens": 100, "completion_tokens": 50
+        }
         return response
 
-    def _make_end_turn_response(self):
-        """Build a mock Anthropic response that ends the loop."""
-        block = MagicMock()
-        block.type = "text"
-        block.text = "Annotations retrieved."
+    def _make_stop_response(self):
+        """Build a mock OpenAI response that ends the loop."""
+        msg = MagicMock()
+        msg.tool_calls = None
+        msg.content = "Annotations retrieved."
+
+        choice = MagicMock()
+        choice.finish_reason = "stop"
+        choice.message = msg
 
         response = MagicMock()
-        response.stop_reason = "end_turn"
-        response.content = [block]
-        response.usage = MagicMock(input_tokens=200, output_tokens=30)
+        response.choices = [choice]
+        response.usage.model_dump.return_value = {
+            "prompt_tokens": 200, "completion_tokens": 30
+        }
         return response
 
     @patch("protein_agent.agent.InterProScanTool")
-    @patch("protein_agent.agent.anthropic.Anthropic")
-    def test_run_tool_loop(self, MockAnthropic, MockTool):
+    def test_run_tool_loop(self, MockTool):
         annotation = SiteAnnotation(
             accession="IPR001270",
             name="Test",
@@ -220,16 +232,15 @@ class ProteinAgentTests(unittest.TestCase):
         tool_instance.search.return_value = [annotation]
         MockTool.return_value = tool_instance
 
-        # Claude: first calls tool, then ends
-        client_instance = MagicMock()
-        client_instance.messages.create.side_effect = [
-            self._make_tool_use_response("tu-1", "MKVL"),
-            self._make_end_turn_response(),
+        # LLM: first calls tool, then ends
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = [
+            self._make_tool_call_response("tu-1", "MKVL"),
+            self._make_stop_response(),
         ]
-        MockAnthropic.return_value = client_instance
 
         from protein_agent.agent import ProteinAgent
-        agent = ProteinAgent(email="test@example.com")
+        agent = ProteinAgent(email="test@example.com", _client=mock_client)
         result = agent.run("MKVL")
 
         self.assertIsInstance(result, AgentResult)
@@ -238,18 +249,16 @@ class ProteinAgentTests(unittest.TestCase):
         self.assertEqual(result.metadata["tool_calls"], 1)
 
     @patch("protein_agent.agent.InterProScanTool")
-    @patch("protein_agent.agent.anthropic.Anthropic")
-    def test_run_no_tool_call(self, MockAnthropic, MockTool):
-        """Claude decides not to call the tool → empty annotations."""
+    def test_run_no_tool_call(self, MockTool):
+        """LLM decides not to call the tool → empty annotations."""
         tool_instance = MagicMock()
         MockTool.return_value = tool_instance
 
-        client_instance = MagicMock()
-        client_instance.messages.create.return_value = self._make_end_turn_response()
-        MockAnthropic.return_value = client_instance
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = self._make_stop_response()
 
         from protein_agent.agent import ProteinAgent
-        agent = ProteinAgent(email="test@example.com")
+        agent = ProteinAgent(email="test@example.com", _client=mock_client)
         result = agent.run("MKVL")
 
         self.assertEqual(len(result.annotations), 0)
@@ -335,6 +344,22 @@ class LoadExamplesTests(unittest.TestCase):
             self.assertEqual(examples[0].fragment_parts, ((1, 4), (5, 8)))
         finally:
             os.unlink(tmp)
+
+
+class EvaluationAgentCliTests(unittest.TestCase):
+    @patch("evaluation_agent.__main__.load_default_env_file")
+    def test_parse_args_model_default_is_gpt_4o(self, _mock_load_env):
+        from evaluation_agent.__main__ import _parse_args
+
+        args = _parse_args(
+            [
+                "--csv",
+                "data/interpro_2503/VenusX_Res_Act_MF50/test.csv",
+                "--email",
+                "test@example.com",
+            ]
+        )
+        self.assertEqual(args.model, "gpt-4o")
 
 
 class ResidueMetricsTests(unittest.TestCase):
